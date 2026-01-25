@@ -1,0 +1,8 @@
+name = "enlace-gateway"
+main = "gateway.worker.js"
+compatibility_date = "2024-10-10"
+
+[vars]
+ENLACE_URL = "https://enlace.example.workers.dev"
+ALLOWED_ORIGINS = "https://www.chattia.io,https://chattia.io,https://chattiavato-a11y.github.io,https://dash.cloudflare.com"
+REQUIRED_HEADERS = "Content-Type,Accept,X-Ops-Asset-Id"
