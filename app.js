@@ -4,9 +4,9 @@ const sendBtn = document.getElementById("send-btn");
 const chatLog = document.getElementById("chat-log");
 // --- OPS Asset Identity (Origin -> AssetId) ---
 const OPS_ASSET_BY_ORIGIN = {
-  "https://www.chattia.io": "asset_01J7Y2D4XABCD3EFGHJKMNPRTB",
-  "https://chattia.io": "asset_01J7Y2D4XABCD3EFGHJKMNPRTC",
-  "https://chattiavato-a11y.github.io": "asset_01J7Y2D4XABCD3EFGHJKMNPRTD",
+  "https://www.gabo.io": "asset_01J7Y2D4XABCD3EFGHJKMNPRTB",
+  "https://gabo.io": "asset_01J7Y2D4XABCD3EFGHJKMNPRTC",
+  "https://chattiavato-a11y.github.io/tastycles": "asset_01J7Y2D4XABCD3EFGHJKMNPRTD",
   "https://enlace.grabem-holdem-nuts-right.workers.dev":
     "asset_01J7Y2D4XABCD3EFGHJKMNPRTA",
 };
@@ -25,9 +25,9 @@ const defaultConfig = {
   gatewayEndpointAssetId: "",
 
   allowedOrigins: [
-    "https://www.chattia.io",
-    "https://chattia.io",
-    "https://chattiavato-a11y.github.io",
+    "https://www.gabo.io",
+    "https://gabo.io",
+    "https://chattiavato-a11y.github.io/tastycles",
     "https://enlace.grabem-holdem-nuts-right.workers.dev",
   ],
 
@@ -45,119 +45,119 @@ const TRANSLATIONS = {
     welcome: "Welcome",
     startConversation: "Start a conversation",
     introCopy:
-      "Chat in any language — spoken or written. Chattia auto-detects your language and replies in kind.",
+      "Chat in any language — spoken or written. Gabo auto-detects your language and replies in kind.",
     greeting: "Hello",
     farewell: "Goodbye",
-    chattiaIntro:
-      "Chat in any language — spoken or written. Chattia auto-detects your language and replies in kind.",
+    gaboIntro:
+      "Chat in any language — spoken or written. Gabo auto-detects your language and replies in kind.",
   },
   es: {
     welcome: "Bienvenido",
     startConversation: "Inicia una conversación",
     introCopy:
-      "Chatea en cualquier idioma — hablado o escrito. Chattia detecta tu idioma y responde en el mismo.",
+      "Chatea en cualquier idioma — hablado o escrito. Gabo detecta tu idioma y responde en el mismo.",
     greeting: "Hola",
     farewell: "Adiós",
-    chattiaIntro:
-      "Chatea en cualquier idioma — hablado o escrito. Chattia detecta tu idioma y responde en el mismo.",
+    gaboIntro:
+      "Chatea en cualquier idioma — hablado o escrito. Gabo detecta tu idioma y responde en el mismo.",
   },
   fr: {
     welcome: "Bienvenue",
     startConversation: "Commencez une conversation",
     introCopy:
-      "Discutez dans n’importe quelle langue — parlée ou écrite. Chattia détecte votre langue et répond en conséquence.",
+      "Discutez dans n’importe quelle langue — parlée ou écrite. Gabo détecte votre langue et répond en conséquence.",
     greeting: "Bonjour",
     farewell: "Au revoir",
-    chattiaIntro:
-      "Discutez dans n’importe quelle langue — parlée ou écrite. Chattia détecte votre langue et répond en conséquence.",
+    gaboIntro:
+      "Discutez dans n’importe quelle langue — parlée ou écrite. Gabo détecte votre langue et répond en conséquence.",
   },
   pt: {
     welcome: "Bem-vindo",
     startConversation: "Inicie uma conversa",
     introCopy:
-      "Converse em qualquer idioma — falado ou escrito. Chattia detecta seu idioma e responde da mesma forma.",
+      "Converse em qualquer idioma — falado ou escrito. Gabo detecta seu idioma e responde da mesma forma.",
     greeting: "Olá",
     farewell: "Tchau",
-    chattiaIntro:
-      "Converse em qualquer idioma — falado ou escrito. Chattia detecta seu idioma e responde da mesma forma.",
+    gaboIntro:
+      "Converse em qualquer idioma — falado ou escrito. Gabo detecta seu idioma e responde da mesma forma.",
   },
   ar: {
     welcome: "مرحبًا",
     startConversation: "ابدأ محادثة",
     introCopy:
-      "تحدث بأي لغة — منطوقة أو مكتوبة. يكتشف Chattia لغتك ويرد بالمثل.",
+      "تحدث بأي لغة — منطوقة أو مكتوبة. يكتشف Gabo لغتك ويرد بالمثل.",
     greeting: "مرحبًا",
     farewell: "مع السلامة",
-    chattiaIntro:
-      "تحدث بأي لغة — منطوقة أو مكتوبة. يكتشف Chattia لغتك ويرد بالمثل.",
+    gaboIntro:
+      "تحدث بأي لغة — منطوقة أو مكتوبة. يكتشف Gabo لغتك ويرد بالمثل.",
   },
   ru: {
     welcome: "Добро пожаловать",
     startConversation: "Начните разговор",
     introCopy:
-      "Общайтесь на любом языке — устном или письменном. Chattia определяет ваш язык и отвечает тем же.",
+      "Общайтесь на любом языке — устном или письменном. Gabo определяет ваш язык и отвечает тем же.",
     greeting: "Здравствуйте",
     farewell: "До свидания",
-    chattiaIntro:
-      "Общайтесь на любом языке — устном или письменном. Chattia определяет ваш язык и отвечает тем же.",
+    gaboIntro:
+      "Общайтесь на любом языке — устном или письменном. Gabo определяет ваш язык и отвечает тем же.",
   },
   zh: {
     welcome: "欢迎",
     startConversation: "开始对话",
-    introCopy: "用任何语言交流——口语或书面语。Chattia 会自动识别你的语言并以相同语言回复。",
+    introCopy: "用任何语言交流——口语或书面语。Gabo 会自动识别你的语言并以相同语言回复。",
     greeting: "你好",
     farewell: "再见",
-    chattiaIntro:
-      "用任何语言交流——口语或书面语。Chattia 会自动识别你的语言并以相同语言回复。",
+    gaboIntro:
+      "用任何语言交流——口语或书面语。Gabo 会自动识别你的语言并以相同语言回复。",
   },
   yue: {
     welcome: "歡迎",
     startConversation: "開始對話",
-    introCopy: "用任何語言交流——口語或書面語。Chattia 會自動識別你嘅語言並用相同語言回覆。",
+    introCopy: "用任何語言交流——口語或書面語。Gabo 會自動識別你嘅語言並用相同語言回覆。",
     greeting: "你好",
     farewell: "再見",
-    chattiaIntro:
-      "用任何語言交流——口語或書面語。Chattia 會自動識別你嘅語言並用相同語言回覆。",
+    gaboIntro:
+      "用任何語言交流——口語或書面語。Gabo 會自動識別你嘅語言並用相同語言回覆。",
   },
   de: {
     welcome: "Willkommen",
     startConversation: "Starten Sie ein Gespräch",
     introCopy:
-      "Chatten Sie in jeder Sprache — gesprochen oder geschrieben. Chattia erkennt Ihre Sprache und antwortet entsprechend.",
+      "Chatten Sie in jeder Sprache — gesprochen oder geschrieben. Gabo erkennt Ihre Sprache und antwortet entsprechend.",
     greeting: "Hallo",
     farewell: "Auf Wiedersehen",
-    chattiaIntro:
-      "Chatten Sie in jeder Sprache — gesprochen oder geschrieben. Chattia erkennt Ihre Sprache und antwortet entsprechend.",
+    gaboIntro:
+      "Chatten Sie in jeder Sprache — gesprochen oder geschrieben. Gabo erkennt Ihre Sprache und antwortet entsprechend.",
   },
   sv: {
     welcome: "Välkommen",
     startConversation: "Starta en konversation",
     introCopy:
-      "Chatta på vilket språk som helst — talat eller skrivet. Chattia identifierar ditt språk och svarar på samma sätt.",
+      "Chatta på vilket språk som helst — talat eller skrivet. Gabo identifierar ditt språk och svarar på samma sätt.",
     greeting: "Hej",
     farewell: "Hej då",
-    chattiaIntro:
-      "Chatta på vilket språk som helst — talat eller skrivet. Chattia identifierar ditt språk och svarar på samma sätt.",
+    gaboIntro:
+      "Chatta på vilket språk som helst — talat eller skrivet. Gabo identifierar ditt språk och svarar på samma sätt.",
   },
   no: {
     welcome: "Velkommen",
     startConversation: "Start en samtale",
     introCopy:
-      "Chat på hvilket som helst språk — muntlig eller skriftlig. Chattia oppdager språket ditt og svarer på samme måte.",
+      "Chat på hvilket som helst språk — muntlig eller skriftlig. Gabo oppdager språket ditt og svarer på samme måte.",
     greeting: "Hei",
     farewell: "Ha det",
-    chattiaIntro:
-      "Chat på hvilket som helst språk — muntlig eller skriftlig. Chattia oppdager språket ditt og svarer på samme måte.",
+    gaboIntro:
+      "Chat på hvilket som helst språk — muntlig eller skriftlig. Gabo oppdager språket ditt og svarer på samme måte.",
   },
   fi: {
     welcome: "Tervetuloa",
     startConversation: "Aloita keskustelu",
     introCopy:
-      "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Chattia tunnistaa kielesi ja vastaa samalla kielellä.",
+      "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Gabo tunnistaa kielesi ja vastaa samalla kielellä.",
     greeting: "Hei",
     farewell: "Näkemiin",
-    chattiaIntro:
-      "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Chattia tunnistaa kielesi ja vastaa samalla kielellä.",
+    gaboIntro:
+      "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Gabo tunnistaa kielesi ja vastaa samalla kielellä.",
   },
 };
 
@@ -277,11 +277,11 @@ const setStatusLine = (element, text, isWarning = false) => {
 const buildResponseMeta = (headers) => {
   if (!headers) return "";
   const values = [
-    { key: "x-chattia-lang-iso2", label: "lang" },
-    { key: "x-chattia-model", label: "model" },
-    { key: "x-chattia-stt-iso2", label: "stt" },
-    { key: "x-chattia-voice-timeout-sec", label: "voice timeout" },
-    { key: "x-chattia-tts-iso2", label: "tts" },
+    { key: "x-gabo-lang-iso2", label: "lang" },
+    { key: "x-gabo-model", label: "model" },
+    { key: "x-gabo-stt-iso2", label: "stt" },
+    { key: "x-gabo-voice-timeout-sec", label: "voice timeout" },
+    { key: "x-gabo-tts-iso2", label: "tts" },
   ];
   const items = values
     .map(({ key, label }) => {
@@ -295,7 +295,7 @@ const buildResponseMeta = (headers) => {
 const logResponseMeta = (headers) => {
   const summary = buildResponseMeta(headers);
   if (!summary) return;
-  console.info("Chattia response metadata:", summary);
+  console.info("Gabo response metadata:", summary);
 };
 
 const updateSendState = () => {
@@ -371,7 +371,7 @@ const addMessage = (text, isUser) => {
 
   const meta = document.createElement("div");
   meta.className = "meta";
-  meta.textContent = isUser ? "You · just now" : "Chattia · just now";
+  meta.textContent = isUser ? "You · just now" : "Gabo · just now";
 
   content.appendChild(bubble);
   content.appendChild(meta);
@@ -520,7 +520,7 @@ async function stopMicAndTranscribe() {
   }
 
   logResponseMeta(res.headers);
-  const detectedLanguage = res.headers.get("x-chattia-stt-iso2");
+  const detectedLanguage = res.headers.get("x-gabo-stt-iso2");
   if (detectedLanguage) {
     lastVoiceLanguage = detectedLanguage;
   } else if (!lastVoiceLanguage && preferredLanguage) {
@@ -663,8 +663,8 @@ const buildLanguageHeaders = (language) => {
     ? navigator.languages.filter(Boolean)
     : [];
   return {
-    "x-chattia-lang-hint": language || "",
-    "x-chattia-lang-list": languages.join(","),
+    "x-gabo-lang-hint": language || "",
+    "x-gabo-lang-list": languages.join(","),
   };
 };
 
@@ -812,7 +812,7 @@ form.addEventListener("submit", async (event) => {
       {
         messages: buildMessages(message),
         meta: {
-          source: "chattia-ui",
+          source: "gabo-ui",
           currentUrl: window.location.href,
           allowedOrigins,
           ...DEFAULT_REQUEST_META,
