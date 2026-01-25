@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://chattia.io/registry/worker-config.json",
+  "$id": "https://gabo.io/registry/worker-config.json",
   "asset_id": "asset_01J7Y2D4XABCD3EFGHJKMNPQRS",
   "asset_type": "config",
-  "display_name": "Chattia Worker Client Config",
+  "display_name": "Gabo Worker Client Config",
   "classification": "public",
   "source": {
-    "origin_url": "https://chattia.io/worker_files/worker.config.json",
-    "repository": "chatbot_",
+    "origin_url": "https://gabo.io/worker_files/worker.config.json",
+    "repository": "tastycles",
     "path": "worker_files/worker.config.json",
     "version": "v1"
   },
@@ -15,16 +15,16 @@
     "sha512": "4193d692f78b7cecb75924901bd92e1147418d429f7bb50fc2895528709d46ecf5fa2ea09705b41183cf3a4112fe01980a101d0b8c242ea0375c2b6536e877b5"
   },
   "serving": {
-    "primary_url": "https://chattia.io/worker_files/worker.config.json",
-    "fallback_url": "https://chattiavato-a11y.github.io/chatbot_/worker_files/worker.config.json",
+    "primary_url": "https://gabo.io/worker_files/worker.config.json",
+    "fallback_url": "https://chattiavato-a11y.github.io/tastycles/worker_files/worker.config.json",
     "cache_ttl_seconds": 300
   },
   "policy": {
     "retention_days": 365,
     "allowed_origins": [
-      "https://chattiavato-a11y.github.io",
-      "https://www.chattia.io",
-      "https://chattia.io",
+      "https://chattiavato-a11y.github.io/tastycles",
+      "https://www.gabo.io",
+      "https://gabo.io",
       "https://dash.cloudflare.com"
     ],
     "required_headers": ["Content-Type", "Accept"]
