@@ -7,7 +7,7 @@ const OPS_ASSET_BY_ORIGIN = {
   "https://www.gabo.io": "asset_01J7Y2D4XABCD3EFGHJKMNPRTB",
   "https://gabo.io": "asset_01J7Y2D4XABCD3EFGHJKMNPRTC",
   "https://chattiavato-a11y.github.io/tastycles": "asset_01J7Y2D4XABCD3EFGHJKMNPRTD",
-  "https://enlace.grabem-holdem-nuts-right.workers.dev":
+  "https://drastic-measures.grabem-holdem-nuts-right.workers.dev":
     "asset_01J7Y2D4XABCD3EFGHJKMNPRTA",
 };
 const OPS_ASSET_ID = OPS_ASSET_BY_ORIGIN[window.location.origin] || "";
@@ -16,10 +16,10 @@ window.OPS_ASSET_ID = OPS_ASSET_ID;
 
 const defaultConfig = {
   assetRegistry: "worker_files/worker.assets.json",
-  workerEndpoint: "https://enlace.grabem-holdem-nuts-right.workers.dev",
-  assistantEndpoint: "https://enlace.grabem-holdem-nuts-right.workers.dev/api/chat",
-  voiceEndpoint: "https://enlace.grabem-holdem-nuts-right.workers.dev/api/voice",
-  ttsEndpoint: "https://enlace.grabem-holdem-nuts-right.workers.dev/api/tts",
+  workerEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
+  assistantEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/chat",
+  voiceEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/voice",
+  ttsEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/tts",
   gatewayEndpoint: "",
   workerEndpointAssetId: "asset_01J7Y2D4XABCD3EFGHJKMNPRTA",
   gatewayEndpointAssetId: "",
@@ -28,7 +28,7 @@ const defaultConfig = {
     "https://www.gabo.io",
     "https://gabo.io",
     "https://chattiavato-a11y.github.io/tastycles",
-    "https://enlace.grabem-holdem-nuts-right.workers.dev",
+    "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
   ],
 
   allowedOriginAssetIds: [

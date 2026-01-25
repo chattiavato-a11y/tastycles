@@ -6,7 +6,7 @@
       "display_name": "Gabo Worker Endpoint",
       "classification": "public",
       "source": {
-        "origin_url": "https://enlace.grabem-holdem-nuts-right.workers.dev",
+        "origin_url": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
         "repository": "tastycles",
         "path": "worker_files/worker.assets.json#worker-endpoint",
         "version": "v1"
@@ -15,8 +15,8 @@
         "sha512": "f51538a8ca591407476cbd85e8e5c27f039c3acac78281198ebf010373401ad91c10f689661e5e4a2ac5820156d6aa43a756e8499c8262f67ce8193784014c12"
       },
       "serving": {
-        "primary_url": "https://enlace.grabem-holdem-nuts-right.workers.dev",
-        "fallback_url": "https://enlace.grabem-holdem-nuts-right.workers.dev",
+        "primary_url": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
+        "fallback_url": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
         "cache_ttl_seconds": 300
       },
       "policy": {
@@ -26,7 +26,7 @@
           "https://gabo.io",
           "https://chattiavato-a11y.github.io/tastycles",
           "https://dash.cloudflare.com",
-          "https://enlace.grabem-holdem-nuts-right.workers.dev"
+          "https://drastic-measures.grabem-holdem-nuts-right.workers.dev"
         ],
         "required_headers": ["Content-Type", "Accept"]
       },

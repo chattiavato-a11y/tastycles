@@ -1,9 +1,9 @@
 {
   "assetRegistry": "worker_files/worker.assets.json",
-  "workerEndpoint": "https://enlace.grabem-holdem-nuts-right.workers.dev",
-  "assistantEndpoint": "https://enlace.grabem-holdem-nuts-right.workers.dev/api/chat",
-  "voiceEndpoint": "https://enlace.grabem-holdem-nuts-right.workers.dev/api/voice",
-  "ttsEndpoint": "https://enlace.grabem-holdem-nuts-right.workers.dev/api/tts",
+  "workerEndpoint": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
+  "assistantEndpoint": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/chat",
+  "voiceEndpoint": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/voice",
+  "ttsEndpoint": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/tts",
   "gatewayEndpoint": "",
   "workerEndpointAssetId": "asset_01J7Y2D4XABCD3EFGHJKMNPRTA",
   "gatewayEndpointAssetId": "",
@@ -12,7 +12,7 @@
     "https://gabo.io",
     "https://chattiavato-a11y.github.io/tastycles",
     "https://dash.cloudflare.com",
-    "https://enlace.grabem-holdem-nuts-right.workers.dev"
+    "https://drastic-measures.grabem-holdem-nuts-right.workers.dev"
   ],
   "allowedOriginAssetIds": [
     "asset_01J7Y2D4XABCD3EFGHJKMNPRTB",

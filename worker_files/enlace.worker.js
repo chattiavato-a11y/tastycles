@@ -1,13 +1,13 @@
 (() => {
   const DEFAULT_CONFIG = {
     assetRegistry: "worker_files/worker.assets.json",
-    workerEndpoint: "https://enlace.grabem-holdem-nuts-right.workers.dev",
+    workerEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
     workerEndpointAssetId: "asset_01J7Y2D4XABCD3EFGHJKMNPRTA",
     allowedOrigins: [
       "https://www.gabo.io",
       "https://gabo.io",
       "https://chattiavato-a11y.github.io/tastycles",
-      "https://enlace.grabem-holdem-nuts-right.workers.dev",
+      "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
     ],
     allowedOriginAssetIds: [
       "asset_01J7Y2D4XABCD3EFGHJKMNPRTB",
