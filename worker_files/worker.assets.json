@@ -1,0 +1,154 @@
+{
+  "assets": [
+    {
+      "asset_id": "asset_01J7Y2D4XABCD3EFGHJKMNPRTA",
+      "asset_type": "config",
+      "display_name": "Chattia Worker Endpoint",
+      "classification": "public",
+      "source": {
+        "origin_url": "https://enlace.grabem-holdem-nuts-right.workers.dev",
+        "repository": "chatbot_",
+        "path": "worker_files/worker.assets.json#worker-endpoint",
+        "version": "v1"
+      },
+      "integrity": {
+        "sha512": "f51538a8ca591407476cbd85e8e5c27f039c3acac78281198ebf010373401ad91c10f689661e5e4a2ac5820156d6aa43a756e8499c8262f67ce8193784014c12"
+      },
+      "serving": {
+        "primary_url": "https://enlace.grabem-holdem-nuts-right.workers.dev",
+        "fallback_url": "https://enlace.grabem-holdem-nuts-right.workers.dev",
+        "cache_ttl_seconds": 300
+      },
+      "policy": {
+        "retention_days": 365,
+        "allowed_origins": [
+          "https://www.chattia.io",
+          "https://chattia.io",
+          "https://chattiavato-a11y.github.io",
+          "https://dash.cloudflare.com",
+          "https://enlace.grabem-holdem-nuts-right.workers.dev"
+        ],
+        "required_headers": ["Content-Type", "Accept"]
+      },
+      "audit": {
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
+        "change_log": [
+          {
+            "by": "automation",
+            "action": "register worker endpoint asset id",
+            "when": "2026-02-01T00:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "asset_id": "asset_01J7Y2D4XABCD3EFGHJKMNPRTB",
+      "asset_type": "config",
+      "display_name": "Chattia Origin (www)",
+      "classification": "public",
+      "source": {
+        "origin_url": "https://www.chattia.io",
+        "repository": "chatbot_",
+        "path": "worker_files/worker.assets.json#origin-www",
+        "version": "v1"
+      },
+      "integrity": {
+        "sha512": "b9356929ab8ca57ff31fd79f82509332dac3b9d45204a3387c9635b65c6bfcc8c6522d6debabd48db3bf872fb3a4bff3357560c9a124cd0e2af0ad6bc70e33f9"
+      },
+      "serving": {
+        "primary_url": "https://www.chattia.io",
+        "fallback_url": "https://www.chattia.io",
+        "cache_ttl_seconds": 300
+      },
+      "policy": {
+        "retention_days": 365,
+        "allowed_origins": ["https://www.chattia.io"],
+        "required_headers": ["Content-Type", "Accept"]
+      },
+      "audit": {
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
+        "change_log": [
+          {
+            "by": "automation",
+            "action": "register www origin asset id",
+            "when": "2026-02-01T00:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "asset_id": "asset_01J7Y2D4XABCD3EFGHJKMNPRTC",
+      "asset_type": "config",
+      "display_name": "Chattia Origin (root)",
+      "classification": "public",
+      "source": {
+        "origin_url": "https://chattia.io",
+        "repository": "chatbot_",
+        "path": "worker_files/worker.assets.json#origin-root",
+        "version": "v1"
+      },
+      "integrity": {
+        "sha512": "a7469d3352ddd1235afeb656cdaab4f8986c034d42ecf6481f662503c1ce946b88e2463113f2c82d183b4e27c0478bc5bc7e7b5037dc6f5d7f660367bf54dc20"
+      },
+      "serving": {
+        "primary_url": "https://chattia.io",
+        "fallback_url": "https://chattia.io",
+        "cache_ttl_seconds": 300
+      },
+      "policy": {
+        "retention_days": 365,
+        "allowed_origins": ["https://chattia.io"],
+        "required_headers": ["Content-Type", "Accept"]
+      },
+      "audit": {
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
+        "change_log": [
+          {
+            "by": "automation",
+            "action": "register root origin asset id",
+            "when": "2026-02-01T00:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "asset_id": "asset_01J7Y2D4XABCD3EFGHJKMNPRTD",
+      "asset_type": "config",
+      "display_name": "Chattiavato Origin (GitHub Pages)",
+      "classification": "public",
+      "source": {
+        "origin_url": "https://chattiavato-a11y.github.io",
+        "repository": "chatbot_",
+        "path": "worker_files/worker.assets.json#origin-github",
+        "version": "v1"
+      },
+      "integrity": {
+        "sha512": "994f545e50dc986642cce51169a8e736159cc595f49796c04102118be403251ec10f22388f7f8e6bba816705f08ab32e3e77505f6f89d4045b5ba5b854f0335d"
+      },
+      "serving": {
+        "primary_url": "https://chattiavato-a11y.github.io",
+        "fallback_url": "https://chattiavato-a11y.github.io",
+        "cache_ttl_seconds": 300
+      },
+      "policy": {
+        "retention_days": 365,
+        "allowed_origins": ["https://chattiavato-a11y.github.io"],
+        "required_headers": ["Content-Type", "Accept"]
+      },
+      "audit": {
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
+        "change_log": [
+          {
+            "by": "automation",
+            "action": "register github pages origin asset id",
+            "when": "2026-02-01T00:00:00Z"
+          }
+        ]
+      }
+    }
+  ]
+}
