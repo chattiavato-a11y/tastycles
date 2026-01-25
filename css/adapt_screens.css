@@ -1,0 +1,87 @@
+/* ✅ Base (add once, outside media queries) */
+html, body { height: 100%; }
+body { margin: 0; }
+
+.chat-app{
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* fallback */
+}
+
+.chat-body{
+  flex: 1 1 auto;
+  min-height: 0; /* CRITICAL: allows overflow scrolling inside flex */
+}
+
+/* ✅ Mobile width */
+@media (max-width: 640px) {
+  /* Keep the page from fighting the chat scroller */
+  body{
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .chat-app{
+    width: 100%;
+    height: 100dvh;          /* modern mobile viewport */
+    min-height: 100dvh;
+    max-height: 100dvh;
+    padding: 16px 12px;      /* moved from body */
+    box-sizing: border-box;
+  }
+
+  .chat-header,
+  .chat-footer{
+    flex: 0 0 auto;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* ✅ THIS is where scrolling should happen */
+  .chat-body{
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: 20px;
+    padding-bottom: 16px;
+
+    scrollbar-width: none;
+  }
+  .chat-body::-webkit-scrollbar{
+    width: 0;
+    height: 0;
+  }
+
+  .bubble{ max-width: 100%; }
+
+  .input-shell{
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .input-shell input{
+    flex-basis: 100%;
+    font-size: 1rem;
+  }
+
+  .voice-helper{ flex-basis: 100%; order: 4; }
+  #micBtn{ order: 2; }
+  .send-btn{ order: 3; width: 100%; }
+}
+
+/* ✅ Short screens */
+@media (max-height: 720px) {
+  .chat-app{
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .chat-body{
+    overflow-y: auto;
+    padding-bottom: 16px;
+  }
+
+  .chat-footer{
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+}
