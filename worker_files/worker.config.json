@@ -8,9 +8,9 @@
   "workerEndpointAssetId": "asset_01J7Y2D4XABCD3EFGHJKMNPRTA",
   "gatewayEndpointAssetId": "",
   "allowedOrigins": [
-    "https://www.chattia.io",
-    "https://chattia.io",
-    "https://chattiavato-a11y.github.io",
+    "https://www.gabo.io",
+    "https://gabo.io",
+    "https://chattiavato-a11y.github.io/tastycles",
     "https://dash.cloudflare.com",
     "https://enlace.grabem-holdem-nuts-right.workers.dev"
   ],
