@@ -1,0 +1,25 @@
+{
+  "assetRegistry": "worker_files/worker.assets.json",
+  "workerEndpoint": "https://enlace.grabem-holdem-nuts-right.workers.dev",
+  "assistantEndpoint": "https://enlace.grabem-holdem-nuts-right.workers.dev/api/chat",
+  "voiceEndpoint": "https://enlace.grabem-holdem-nuts-right.workers.dev/api/voice",
+  "ttsEndpoint": "https://enlace.grabem-holdem-nuts-right.workers.dev/api/tts",
+  "gatewayEndpoint": "",
+  "workerEndpointAssetId": "asset_01J7Y2D4XABCD3EFGHJKMNPRTA",
+  "gatewayEndpointAssetId": "",
+  "allowedOrigins": [
+    "https://www.chattia.io",
+    "https://chattia.io",
+    "https://chattiavato-a11y.github.io",
+    "https://dash.cloudflare.com",
+    "https://enlace.grabem-holdem-nuts-right.workers.dev"
+  ],
+  "allowedOriginAssetIds": [
+    "asset_01J7Y2D4XABCD3EFGHJKMNPRTB",
+    "asset_01J7Y2D4XABCD3EFGHJKMNPRTC",
+    "asset_01J7Y2D4XABCD3EFGHJKMNPRTD",
+    "",
+    "asset_01J7Y2D4XABCD3EFGHJKMNPRTA"
+  ],
+  "requiredHeaders": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
+}
