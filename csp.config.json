@@ -1,0 +1,9 @@
+{
+  "nonce_placeholder": "{{CSP_NONCE}}",
+  "script_hashes": [],
+  "style_hashes": [],
+  "notes": [
+    "Populate script_hashes/style_hashes with sha256-<base64> values if you add inline scripts/styles.",
+    "Rotate CSP_NONCE per response at the edge (Cloudflare Worker/Pages) and inject it into the CSP header and any inline tags if used."
+  ]
+}
