@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chattia</title>
+  <!-- Security headers are delivered via HTTP response headers in _headers. -->
+  <meta name="description" content="Chattia delivers secure, human-centered concierge chat experiences with compliance-first design, fast performance, and AI-ready guidance." />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#10a37f" />
+  <link rel="canonical" href="https://chattia.io/" />
+  <meta property="og:title" content="Chattia — Secure Concierge Chat UI" />
+  <meta property="og:description" content="A compliance-first chat interface optimized for Core Web Vitals, security headers, and SEO-ready metadata." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://chattia.io/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Chattia — Secure Concierge Chat UI" />
+  <meta name="twitter:description" content="A compliant, performance-ready chat UI with CSP, CORS, and Core Web Vitals targets." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/adapt_screens.css" />
+</head>
+<body>
+  <main class="chat-app" aria-label="Chattia chat interface">
+    <header class="chat-header">
+      <div class="brand">
+        <div class="brand-title">
+          <h1>Chattia</h1>
+        </div>
+      </div>
+      <div class="header-actions" aria-live="polite">
+        <div class="status-stack">
+          <span id="thinking-status" class="status-line">Standing by.</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="chat-body" id="chat-log" aria-live="polite">
+      <div class="intro-copy intro-panel" aria-label="Chat introduction">
+        <span class="intro-kicker" data-i18n="welcome">Welcome</span>
+        <h2 data-i18n="startConversation">Start a conversation</h2>
+        <p>
+          <span data-i18n="introCopy">
+            Chat in any language — spoken or written. Chattia auto-detects your language
+            and replies in kind.
+          </span>
+        </p>
+      </div>
+    </section>
+
+    <footer class="chat-footer">
+      <form id="chat-form" class="input-shell" autocomplete="off">
+        <input
+          id="msgInput"
+          type="text"
+          placeholder="Message in any language..."
+          maxlength="256"
+          aria-label="Type your message"
+          required
+        />
+        <span id="voice-helper" class="voice-helper" aria-live="polite"></span>
+        <button id="micBtn" type="button" aria-label="Voice reply" aria-pressed="false">
+          <svg class="voice-wave-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <rect x="4" y="6" width="40" height="36" rx="10" fill="currentColor" />
+            <g stroke="#ffffff" stroke-linecap="round" stroke-width="2.6">
+              <line x1="16" y1="24" x2="16" y2="24" />
+              <line x1="20" y1="19" x2="20" y2="29" />
+              <line x1="24" y1="15" x2="24" y2="33" />
+              <line x1="28" y1="19" x2="28" y2="29" />
+              <line x1="32" y1="22" x2="32" y2="26" />
+            </g>
+          </svg>
+        </button>
+        <button class="send-btn" type="submit" id="send-btn" disabled>
+          Send
+        </button>
+      </form>
+    </footer>
+  </main>
+
+  <script src="worker_files/enlace.worker.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
