@@ -25,7 +25,8 @@
           "https://www.gabo.io",
           "https://gabo.io",
           "https://dash.cloudflare.com",
-          "https://drastic-measures.grabem-holdem-nuts-right.workers.dev"
+          "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
+          "https://chattiavato-a11y.github.io"
         ],
         "required_headers": ["Content-Type", "Accept"]
       },
@@ -108,6 +109,42 @@
           {
             "by": "automation",
             "action": "register root origin asset id",
+            "when": "2026-02-01T00:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "asset_id": "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
+      "asset_type": "config",
+      "display_name": "Chattia Vato GitHub Pages Origin",
+      "classification": "public",
+      "source": {
+        "origin_url": "https://chattiavato-a11y.github.io/tastycles/",
+        "repository": "tastycles",
+        "path": "worker_files/worker.assets.json#origin-chattiavato",
+        "version": "v1"
+      },
+      "integrity": {
+        "sha512": "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756"
+      },
+      "serving": {
+        "primary_url": "https://chattiavato-a11y.github.io/tastycles/",
+        "fallback_url": "https://chattiavato-a11y.github.io/tastycles/",
+        "cache_ttl_seconds": 300
+      },
+      "policy": {
+        "retention_days": 365,
+        "allowed_origins": ["https://chattiavato-a11y.github.io"],
+        "required_headers": ["Content-Type", "Accept"]
+      },
+      "audit": {
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
+        "change_log": [
+          {
+            "by": "automation",
+            "action": "register github pages origin asset id",
             "when": "2026-02-01T00:00:00Z"
           }
         ]

@@ -4,5 +4,5 @@ compatibility_date = "2024-10-10"
 
 [vars]
 ENLACE_URL = "https://drastic-measures.grabem-holdem-nuts-right.workers.dev"
-ALLOWED_ORIGINS = "https://www.gabo.io,https://gabo.io,https://dash.cloudflare.com"
+ALLOWED_ORIGINS = "https://www.gabo.io,https://gabo.io,https://dash.cloudflare.com,https://chattiavato-a11y.github.io"
 REQUIRED_HEADERS = "Content-Type,Accept,X-Ops-Asset-Id"
