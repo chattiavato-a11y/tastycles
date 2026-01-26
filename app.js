@@ -16,6 +16,8 @@ const OPS_ASSET_BY_ORIGIN = {
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
   "http://127.0.0.1:5500":
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+  "https://chattiavato-a11y.github.io":
+    "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
 };
 const OPS_ASSET_ID = OPS_ASSET_BY_ORIGIN[window.location.origin] || "";
 window.OPS_ASSET_BY_ORIGIN = OPS_ASSET_BY_ORIGIN;
@@ -39,6 +41,7 @@ const defaultConfig = {
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5500",
+    "https://chattiavato-a11y.github.io",
   ],
 
   allowedOriginAssetIds: [
@@ -48,6 +51,7 @@ const defaultConfig = {
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+    "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
   ],
 
 };
