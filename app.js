@@ -10,6 +10,12 @@ const OPS_ASSET_BY_ORIGIN = {
     "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
   "https://drastic-measures.grabem-holdem-nuts-right.workers.dev":
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+  "http://localhost:3000":
+    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+  "http://localhost:5173":
+    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+  "http://127.0.0.1:5500":
+    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
 };
 const OPS_ASSET_ID = OPS_ASSET_BY_ORIGIN[window.location.origin] || "";
 window.OPS_ASSET_BY_ORIGIN = OPS_ASSET_BY_ORIGIN;
@@ -30,11 +36,17 @@ const defaultConfig = {
     "https://www.gabo.io",
     "https://gabo.io",
     "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5500",
   ],
 
   allowedOriginAssetIds: [
     "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
     "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
+    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
   ],
 
@@ -300,6 +312,26 @@ const logResponseMeta = (headers) => {
 
 const updateSendState = () => {
   sendBtn.disabled = isStreaming || input.value.trim().length === 0;
+};
+
+const updateCancelState = () => {
+  if (!cancelBtn) return;
+  cancelBtn.hidden = !isStreaming;
+  cancelBtn.disabled = !isStreaming;
+};
+
+const cancelStream = () => {
+  if (!activeController) return;
+  activeController.abort();
+  if (activeAssistantBubble) {
+    activeAssistantBubble.textContent = "Request canceled.";
+    activeAssistantBubble.setAttribute(
+      "dir",
+      getTextDirection(activeAssistantBubble.textContent)
+    );
+  }
+  stopThinking();
+  setStreamingState(false);
 };
 
 const updateThinkingText = () => {
@@ -608,6 +640,7 @@ document.addEventListener("DOMContentLoaded", () => {
 const setStreamingState = (active) => {
   isStreaming = active;
   updateSendState();
+  updateCancelState();
 };
 
 cancelBtn?.addEventListener("click", cancelStream);
@@ -782,6 +815,7 @@ form.addEventListener("submit", async (event) => {
   input.blur();
 
   const assistantBubble = addMessage(thinkingFrames[0], false);
+  activeAssistantBubble = assistantBubble;
   startThinking(assistantBubble);
 
   const endpoint = getActiveEndpoint();
@@ -864,6 +898,7 @@ const init = async () => {
   warnIfOriginMissing();
   updateEndpointStatus();
   updateSendState();
+  updateCancelState();
   stopThinking();
 };
 

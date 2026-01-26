@@ -378,6 +378,30 @@ body {
   box-shadow: 0 12px 24px rgba(239, 68, 68, 0.28);
 }
 
+.cancel-btn {
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.cancel-btn:hover {
+  background: rgba(248, 250, 252, 0.9);
+  border-color: rgba(100, 116, 139, 0.7);
+  color: #0f172a;
+}
+
+.cancel-btn:disabled {
+  cursor: not-allowed;
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.45);
+  background: #f8fafc;
+}
+
 .footer-hint {
   font-size: 0.75rem;
   color: var(--muted);
