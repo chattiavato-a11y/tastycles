@@ -3,6 +3,6 @@ main = "gateway.worker.js"
 compatibility_date = "2024-10-10"
 
 [vars]
-ENLACE_URL = "https://enlace.example.workers.dev"
-ALLOWED_ORIGINS = "https://www.gabo.io,https://gabo.io,https://chattiavato-a11y.github.io/tastycles,https://dash.cloudflare.com"
+ENLACE_URL = "https://drastic-measures.grabem-holdem-nuts-right.workers.dev"
+ALLOWED_ORIGINS = "https://www.gabo.io,https://gabo.io,https://dash.cloudflare.com"
 REQUIRED_HEADERS = "Content-Type,Accept,X-Ops-Asset-Id"
