@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gabo.io/registry/worker-config.json",
-  "asset_id": "asset_01J7Y2D4XABCD3EFGHJKMNPQRS",
+  "asset_id": "6bb207bc4d9e1871237d27a0089d0d977643e4ba3cb40bf306980c51985c7c96fcc3adc8b5b9590941f125278fc62e9d72485180cbb21c99bb103debf99e494e",
   "asset_type": "config",
   "display_name": "Gabo Worker Client Config",
   "classification": "public",
@@ -12,17 +12,16 @@
     "version": "v1"
   },
   "integrity": {
-    "sha512": "4193d692f78b7cecb75924901bd92e1147418d429f7bb50fc2895528709d46ecf5fa2ea09705b41183cf3a4112fe01980a101d0b8c242ea0375c2b6536e877b5"
+    "sha512": "6bb207bc4d9e1871237d27a0089d0d977643e4ba3cb40bf306980c51985c7c96fcc3adc8b5b9590941f125278fc62e9d72485180cbb21c99bb103debf99e494e"
   },
   "serving": {
     "primary_url": "https://gabo.io/worker_files/worker.config.json",
-    "fallback_url": "https://chattiavato-a11y.github.io/tastycles/worker_files/worker.config.json",
+    "fallback_url": "https://gabo.io/worker_files/worker.config.json",
     "cache_ttl_seconds": 300
   },
   "policy": {
     "retention_days": 365,
     "allowed_origins": [
-      "https://chattiavato-a11y.github.io/tastycles",
       "https://www.gabo.io",
       "https://gabo.io",
       "https://dash.cloudflare.com"
