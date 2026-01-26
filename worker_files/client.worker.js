@@ -158,7 +158,7 @@
         }
       }
     } catch (error) {
-      console.warn("Unable to load Enlace repo config.", error);
+      console.warn("Unable to load Worker client config.", error);
     } finally {
       rebuildOriginMap();
     }
@@ -267,7 +267,7 @@
     });
   };
 
-  window.EnlaceRepo = {
+  window.WorkerClient = {
     init,
     getConfig,
     getEndpoint,

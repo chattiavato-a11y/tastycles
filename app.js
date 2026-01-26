@@ -418,7 +418,7 @@ const addMessage = (text, isUser) => {
   return bubble;
 };
 
-// ===== Voice / Mic (Enlace STT) =====
+// ===== Voice / Mic (Worker STT) =====
 
 let micStream = null;
 let micRecorder = null;
@@ -458,15 +458,15 @@ function setMicUI(isOn) {
 
 async function playVoiceReply(text) {
   if (!text) return;
-  if (!window.EnlaceRepo?.postTTS) {
-    throw new Error("Enlace TTS module is not loaded.");
+  if (!window.WorkerClient?.postTTS) {
+    throw new Error("Worker TTS module is not loaded.");
   }
   if (activeVoiceAudio) {
     activeVoiceAudio.pause();
     activeVoiceAudio = null;
   }
   const voiceLanguage = getPreferredLanguage();
-  const res = await window.EnlaceRepo.postTTS(
+  const res = await window.WorkerClient.postTTS(
     { text, language: voiceLanguage || undefined },
     {
       extraHeaders: buildLanguageHeaders(voiceLanguage),
@@ -542,11 +542,11 @@ async function stopMicAndTranscribe() {
     throw new Error("No audio captured. Please try again.");
   }
 
-  if (!window.EnlaceRepo?.postVoiceSTT) {
-    throw new Error("Enlace voice module is not loaded.");
+  if (!window.WorkerClient?.postVoiceSTT) {
+    throw new Error("Worker voice module is not loaded.");
   }
   const preferredLanguage = getPreferredLanguage();
-  const res = await window.EnlaceRepo.postVoiceSTT(blob, {
+  const res = await window.WorkerClient.postVoiceSTT(blob, {
     extraHeaders: buildLanguageHeaders(preferredLanguage),
   });
 
@@ -650,10 +650,10 @@ const setStreamingState = (active) => {
 cancelBtn?.addEventListener("click", cancelStream);
 
 const loadRegistryConfig = async () => {
-  if (!window.EnlaceRepo?.init) return;
+  if (!window.WorkerClient?.init) return;
   try {
-    await window.EnlaceRepo.init();
-    const data = window.EnlaceRepo.getConfig();
+    await window.WorkerClient.init();
+    const data = window.WorkerClient.getConfig();
     if (data.workerEndpoint) {
       workerEndpoint = data.workerEndpoint;
     } else if (data.assistantEndpoint) {
@@ -837,8 +837,8 @@ form.addEventListener("submit", async (event) => {
 
   try {
     try {
-      if (!window.EnlaceRepo?.postChat) {
-        throw new Error("Enlace repo module is not loaded.");
+      if (!window.WorkerClient?.postChat) {
+        throw new Error("Worker client module is not loaded.");
       }
     } catch (error) {
       assistantBubble.textContent = String(error?.message || error);
@@ -846,7 +846,7 @@ form.addEventListener("submit", async (event) => {
       return;
     }
 
-    const response = await window.EnlaceRepo.postChat(
+    const response = await window.WorkerClient.postChat(
       {
         messages: buildMessages(message),
         meta: {

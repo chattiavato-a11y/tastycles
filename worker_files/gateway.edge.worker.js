@@ -1,10 +1,10 @@
 /**
- * enlace — FIXED (aligned to Upstream) (no vars, no secrets)
+ * gateway — FIXED (aligned to Brain) (no vars, no secrets)
  * + ASSET-ID ENFORCED (Origin -> AssetID)
- * + Clean/scan/sanitize BEFORE Guard + Upstream
- * + Guard at Enlace
- * + Forward Upstream headers
- * + Convert Upstream streaming (raw JSON OR SSE) -> SSE text deltas (UI-friendly)
+ * + Clean/scan/sanitize BEFORE Guard + Brain
+ * + Guard at Gateway
+ * + Forward Brain headers
+ * + Convert Brain streaming (raw JSON OR SSE) -> SSE text deltas (UI-friendly)
  *
  * IMPORTANT FIX (UPDATED):
  * - SSE framing uses "data:" (NO space) and preserves leading spaces in deltas.
@@ -15,8 +15,8 @@
  * - Whisper STT (runWhisper) unchanged, shared pattern.
  *
  * UPDATE (EDGE ENFORCEMENT):
- * - If Upstream ever outputs "Author: Gabriel Anangono" or "Gabriel Anangono",
- *   Enlace will STRIP it unless the user explicitly asked who created/authored/built it.
+ * - If Brain ever outputs "Author: Gabriel Anangono" or "Gabriel Anangono",
+ *   Gateway will STRIP it unless the user explicitly asked who created/authored/built it.
  */
 
 // -------------------------
@@ -44,10 +44,10 @@ const ALLOWED_ORIGINS = new Set(Array.from(ORIGIN_ASSET_ID.keys()));
 
 // Internal hop header (NOT a secret; just a guardrail)
 const HOP_HDR = "x-gabo-hop";
-const HOP_VAL = "enlace";
+const HOP_VAL = "gateway";
 
 // -------------------------
-// Models (ENLACE)
+// Models (GATEWAY)
 // -------------------------
 const MODEL_GUARD = "@cf/meta/llama-guard-3-8b";
 const MODEL_STT = "@cf/openai/whisper-large-v3-turbo";
@@ -64,7 +64,7 @@ const MODEL_TRANSLATE = "@cf/meta/m2m100-1.2b";
 const MODEL_EMBED = "@cf/baai/bge-m3";
 
 // -------------------------
-// Limits (ENLACE)
+// Limits (GATEWAY)
 // -------------------------
 const MAX_BODY_CHARS = 8_000;
 const MAX_MESSAGES = 30;
@@ -892,7 +892,7 @@ export default {
     if (url.pathname === "/" || url.pathname === "/health") {
       const h = corsHeaders(origin);
       securityHeaders().forEach((v, k) => h.set(k, v));
-      return new Response("enlace: ok", { status: 200, headers: h });
+      return new Response("gateway: ok", { status: 200, headers: h });
     }
 
     // Helpful GET usage

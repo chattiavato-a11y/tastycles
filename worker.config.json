@@ -1,6 +1,6 @@
 {
   "assetRegistry": "worker_files/worker.assets.json",
-  "workerScript": "worker_files/enlace.edge.worker.js",
+  "workerScript": "worker_files/gateway.edge.worker.js",
   "workerEndpoint": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
   "assistantEndpoint": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/chat",
   "voiceEndpoint": "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/voice",
