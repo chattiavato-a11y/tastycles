@@ -24,7 +24,8 @@
     "allowed_origins": [
       "https://www.gabo.io",
       "https://gabo.io",
-      "https://dash.cloudflare.com"
+      "https://dash.cloudflare.com",
+      "https://chattiavato-a11y.github.io"
     ],
     "required_headers": ["Content-Type", "Accept"]
   },

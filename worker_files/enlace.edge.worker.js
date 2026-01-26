@@ -1,21 +1,21 @@
 /**
- * enlace — FIXED (aligned to Brain) (no vars, no secrets)
+ * enlace — FIXED (aligned to Upstream) (no vars, no secrets)
  * + ASSET-ID ENFORCED (Origin -> AssetID)
- * + Clean/scan/sanitize BEFORE Guard + Brain
+ * + Clean/scan/sanitize BEFORE Guard + Upstream
  * + Guard at Enlace
- * + Forward Brain headers
- * + Convert Brain streaming (raw JSON OR SSE) -> SSE text deltas (UI-friendly)
+ * + Forward Upstream headers
+ * + Convert Upstream streaming (raw JSON OR SSE) -> SSE text deltas (UI-friendly)
  *
  * IMPORTANT FIX (UPDATED):
  * - SSE framing uses "data:" (NO space) and preserves leading spaces in deltas.
  * - No zero-width prefix injection (UI now preserves spaces correctly).
  *
  * UPDATE:
- * - Multi-language detection matches Brain (heuristics + optional model fallback; meta is a hint).
+ * - Multi-language detection matches Upstream (heuristics + optional model fallback; meta is a hint).
  * - Whisper STT (runWhisper) unchanged, shared pattern.
  *
  * UPDATE (EDGE ENFORCEMENT):
- * - If Brain ever outputs "Author: Gabriel Anangono" or "Gabriel Anangono",
+ * - If Upstream ever outputs "Author: Gabriel Anangono" or "Gabriel Anangono",
  *   Enlace will STRIP it unless the user explicitly asked who created/authored/built it.
  */
 
@@ -34,6 +34,10 @@ const ORIGIN_ASSET_ID = new Map([
   [
     "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+  ],
+  [
+    "https://chattiavato-a11y.github.io",
+    "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
   ],
 ]);
 const ALLOWED_ORIGINS = new Set(Array.from(ORIGIN_ASSET_ID.keys()));
@@ -298,7 +302,7 @@ function stripAuthorIfNotAsked(text, allow) {
 }
 
 // -------------------------
-// Language (multi-language) — aligned to Brain
+// Language (multi-language) — aligned to Upstream
 // -------------------------
 function normalizeIso2(code) {
   const s = safeTextOnly(code || "").toLowerCase();
@@ -560,10 +564,16 @@ function base64ToBytes(b64) {
 }
 
 // -------------------------
-// Brain call
+// Upstream call
 // -------------------------
-async function callBrain(payload) {
-  return fetch("https://pun-pun-freak.grabem-holdem-nuts-right.workers.dev/api/chat", {
+async function callUpstream(payload, env) {
+  const upstreamUrl =
+    (env && env.UPSTREAM_URL) ||
+    "";
+  if (!upstreamUrl) {
+    throw new Error("UPSTREAM_URL is not configured.");
+  }
+  return fetch(`${upstreamUrl.replace(/\/$/, "")}/api/chat`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -574,7 +584,7 @@ async function callBrain(payload) {
   });
 }
 
-function forwardBrainHeaders(outHeaders, brainResp) {
+function forwardUpstreamHeaders(outHeaders, upstreamResp) {
   const pass = [
     "x-gabo-lang-iso2",
     "x-gabo-model",
@@ -582,13 +592,13 @@ function forwardBrainHeaders(outHeaders, brainResp) {
     "x-gabo-embeddings",
   ];
   for (const k of pass) {
-    const v = brainResp.headers.get(k);
+    const v = upstreamResp.headers.get(k);
     if (v) outHeaders.set(k, v);
   }
 }
 
 // -------------------------
-// FIX: Brain stream -> SSE text deltas (preserve leading spaces)
+// FIX: Upstream stream -> SSE text deltas (preserve leading spaces)
 // -------------------------
 function sseDataFrame(text) {
   // IMPORTANT: "data:" (NO trailing space). Payload must be unmodified.
@@ -691,11 +701,11 @@ function getDeltaFromObj(obj) {
 }
 
 // UPDATED SIGNATURE: allowAuthor
-function bridgeBrainToSSE(brainBody, allowAuthor) {
+function bridgeUpstreamToSSE(upstreamBody, allowAuthor) {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
 
-  if (!brainBody) {
+  if (!upstreamBody) {
     return new ReadableStream({
       start(controller) {
         controller.enqueue(encoder.encode(sseDataFrame("")));
@@ -706,7 +716,7 @@ function bridgeBrainToSSE(brainBody, allowAuthor) {
 
   return new ReadableStream({
     async start(controller) {
-      const reader = brainBody.getReader();
+      const reader = upstreamBody.getReader();
       let buf = "";
 
       try {
@@ -719,7 +729,7 @@ function bridgeBrainToSSE(brainBody, allowAuthor) {
           buf += decoder.decode(value, { stream: true });
           buf = buf.replace(/\r\n/g, "\n");
 
-          // 1) If Brain is SSE, parse SSE blocks
+          // 1) If Upstream is SSE, parse SSE blocks
           const looksLikeSSE = /(^|\n)data:/.test(buf) && buf.includes("\n\n");
           if (looksLikeSSE) {
             const { blocks, rest } = extractSSEBlocks(buf);
@@ -936,7 +946,7 @@ export default {
     baseExtra.set("x-gabo-asset-verified", "1");
 
     // -----------------------
-    // /api/chat -> Guard -> Brain -> SSE (TEXT DELTAS)
+    // /api/chat -> Guard -> Upstream -> SSE (TEXT DELTAS)
     // -----------------------
     if (isChat) {
       const ct = (request.headers.get("content-type") || "").toLowerCase();
@@ -962,7 +972,7 @@ export default {
 
       const metaSafe = sanitizeMeta(body.meta);
 
-      // Detect language (multi-language) — aligned to Brain
+      // Detect language (multi-language) — aligned to Upstream
       const langIso2 = await detectLangIso2(env, messages, metaSafe);
       if (!metaSafe.lang_iso2 || metaSafe.lang_iso2 === "auto" || metaSafe.lang_iso2 === "und") {
         metaSafe.lang_iso2 = langIso2;
@@ -980,23 +990,23 @@ export default {
       if (!verdict.safe)
         return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, baseExtra);
 
-      // Call Brain
-      let brainResp;
+      // Call Upstream
+      let upstreamResp;
       try {
-        brainResp = await callBrain({ messages, meta: metaSafe });
+        upstreamResp = await callUpstream({ messages, meta: metaSafe }, env);
       } catch (e) {
-        return json(502, { error: "Brain unreachable", detail: String(e?.message || e) }, baseExtra);
+        return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, baseExtra);
       }
 
-      if (!brainResp.ok) {
-        const t = await brainResp.text().catch(() => "");
-        return json(502, { error: "Brain error", status: brainResp.status, detail: t.slice(0, 2000) }, baseExtra);
+      if (!upstreamResp.ok) {
+        const t = await upstreamResp.text().catch(() => "");
+        return json(502, { error: "Upstream error", status: upstreamResp.status, detail: t.slice(0, 2000) }, baseExtra);
       }
 
       const extra = new Headers(baseExtra);
-      forwardBrainHeaders(extra, brainResp);
+      forwardUpstreamHeaders(extra, upstreamResp);
 
-      return sse(bridgeBrainToSSE(brainResp.body, allowAuthor), extra);
+      return sse(bridgeUpstreamToSSE(upstreamResp.body, allowAuthor), extra);
     }
 
     // -----------------------
@@ -1040,7 +1050,7 @@ export default {
     }
 
     // -----------------------
-    // /api/voice -> STT JSON (mode=stt) OR Guard -> Brain -> SSE (TEXT DELTAS)
+    // /api/voice -> STT JSON (mode=stt) OR Guard -> Upstream -> SSE (TEXT DELTAS)
     // -----------------------
     if (isVoice) {
       const mode = String(url.searchParams.get("mode") || "stt").toLowerCase();
@@ -1101,7 +1111,7 @@ export default {
       if (looksMalicious(transcript))
         return json(403, { error: "Blocked by security sanitizer" }, baseExtra);
 
-      // Detect STT language (multi-language) — aligned to Brain
+      // Detect STT language (multi-language) — aligned to Upstream
       const langIso2 = await detectLangIso2(env, [{ role: "user", content: transcript }], metaSafe);
 
       const extra = new Headers(baseExtra);
@@ -1135,21 +1145,21 @@ export default {
       if (!verdict.safe)
         return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, extra);
 
-      // Call Brain
-      let brainResp;
+      // Call Upstream
+      let upstreamResp;
       try {
-        brainResp = await callBrain({ messages, meta: metaSafe });
+        upstreamResp = await callUpstream({ messages, meta: metaSafe }, env);
       } catch (e) {
-        return json(502, { error: "Brain unreachable", detail: String(e?.message || e) }, extra);
+        return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, extra);
       }
 
-      if (!brainResp.ok) {
-        const t = await brainResp.text().catch(() => "");
-        return json(502, { error: "Brain error", status: brainResp.status, detail: t.slice(0, 2000) }, extra);
+      if (!upstreamResp.ok) {
+        const t = await upstreamResp.text().catch(() => "");
+        return json(502, { error: "Upstream error", status: upstreamResp.status, detail: t.slice(0, 2000) }, extra);
       }
 
-      forwardBrainHeaders(extra, brainResp);
-      return sse(bridgeBrainToSSE(brainResp.body, allowAuthor), extra);
+      forwardUpstreamHeaders(extra, upstreamResp);
+      return sse(bridgeUpstreamToSSE(upstreamResp.body, allowAuthor), extra);
     }
 
     return json(500, { error: "Unhandled route" }, baseExtra);
