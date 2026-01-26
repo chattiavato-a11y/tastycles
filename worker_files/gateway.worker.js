@@ -1,6 +1,7 @@
 const DEFAULT_ALLOWED_ORIGINS = [];
 const DEFAULT_REQUIRED_HEADERS = ["Accept", "X-Ops-Asset-Id"];
 const MAX_BODY_BYTES = 250000;
+const WORKER_URL = "https://drastic-measures.grabem-holdem-nuts-right.workers.dev";
 
 const SECURITY_PATTERNS = [
   { id: "script-tag", pattern: /<\s*script[^>]*>[\s\S]*?<\s*\/\s*script>/gi },
@@ -139,9 +140,9 @@ const enrichPayload = (payload, request, findings, requestId) => {
   };
 };
 
-const buildTargetUrl = (requestUrl, enlaceUrl) => {
+const buildTargetUrl = (requestUrl, workerUrl) => {
   const incoming = new URL(requestUrl);
-  return new URL(`${incoming.pathname}${incoming.search}`, enlaceUrl);
+  return new URL(`${incoming.pathname}${incoming.search}`, workerUrl);
 };
 
 export default {
@@ -164,15 +165,6 @@ export default {
       return new Response(JSON.stringify({ status: "ok" }), {
         status: 200,
         headers: healthHeaders,
-      });
-    }
-
-    if (!env.ENLACE_URL) {
-      const errorHeaders = new Headers(corsHeaders);
-      applySecurityHeaders(errorHeaders);
-      return new Response("ENLACE_URL is not configured.", {
-        status: 500,
-        headers: errorHeaders,
       });
     }
 
@@ -211,7 +203,7 @@ export default {
 
     const requestId = crypto.randomUUID();
     let upstreamResponse;
-    const targetUrl = buildTargetUrl(request.url, env.ENLACE_URL);
+    const targetUrl = buildTargetUrl(request.url, WORKER_URL);
 
     if (isVoiceStt && !isJson) {
       const rawBody = await request.arrayBuffer();
