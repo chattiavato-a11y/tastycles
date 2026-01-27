@@ -24,11 +24,10 @@
         "allowed_origins": [
           "https://www.gabo.io",
           "https://gabo.io",
-          "https://dash.cloudflare.com",
           "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
           "https://chattiavato-a11y.github.io"
         ],
-        "required_headers": ["Content-Type", "Accept"]
+        "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
       },
       "audit": {
         "created_at": "2026-02-01T00:00:00Z",
@@ -64,7 +63,7 @@
       "policy": {
         "retention_days": 365,
         "allowed_origins": ["https://www.gabo.io"],
-        "required_headers": ["Content-Type", "Accept"]
+        "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
       },
       "audit": {
         "created_at": "2026-02-01T00:00:00Z",
@@ -100,7 +99,7 @@
       "policy": {
         "retention_days": 365,
         "allowed_origins": ["https://gabo.io"],
-        "required_headers": ["Content-Type", "Accept"]
+        "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
       },
       "audit": {
         "created_at": "2026-02-01T00:00:00Z",
@@ -136,7 +135,7 @@
       "policy": {
         "retention_days": 365,
         "allowed_origins": ["https://chattiavato-a11y.github.io"],
-        "required_headers": ["Content-Type", "Accept"]
+        "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
       },
       "audit": {
         "created_at": "2026-02-01T00:00:00Z",

@@ -737,15 +737,18 @@ const streamWorkerResponse = async (response, bubble) => {
       const lines = part.split("\n");
       const dataLines = lines
         .filter((line) => line.startsWith("data:"))
-        .map((line) => line.replace(/^data:\s?/, ""));
-      const data = dataLines.join("\n").trim();
-      if (data && data !== "[DONE]") {
+        .map((line) => line.slice(5));
+      if (dataLines.length === 0) return;
+      const data = dataLines.join("\n");
+      const trimmed = data.trim();
+      if (trimmed === "[DONE]") return;
+      if (data !== "") {
         fullText += data;
         appendText(data);
       }
     });
   }
-  return fullText.trim();
+  return fullText;
 };
 
 const stringifyWorkerValue = (value) => {
