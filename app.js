@@ -276,8 +276,6 @@ const isOriginAllowed = (origin, allowedList) => {
   );
 };
 
-const originStatus = document.getElementById("origin-status");
-const endpointStatus = document.getElementById("endpoint-status");
 const thinkingStatus = document.getElementById("thinking-status");
 const voiceHelper = document.getElementById("voice-helper");
 const cancelBtn = document.getElementById("cancel-btn");
@@ -285,11 +283,6 @@ const thinkingFrames = ["Thinking.", "Thinking..", "Thinking...", "Thinking...."
 let thinkingInterval = null;
 let thinkingIndex = 0;
 let activeThinkingBubble = null;
-const setStatusLine = (element, text, isWarning = false) => {
-  if (!element) return;
-  element.textContent = text;
-  element.classList.toggle("warning", isWarning);
-};
 
 const buildResponseMeta = (headers) => {
   if (!headers) return "";
@@ -791,25 +784,6 @@ const warnIfOriginMissing = () => {
       `Origin ${window.location.origin} is not listed in worker_files/worker.config.json.`
     );
   }
-  setStatusLine(
-    originStatus,
-    originAllowed
-      ? `Origin: ${window.location.origin}`
-      : `Origin: ${window.location.origin} (not listed)`,
-    !originAllowed
-  );
-};
-
-const updateEndpointStatus = () => {
-  const activeEndpoint = getActiveEndpoint();
-  const isConfigured = Boolean(activeEndpoint);
-  setStatusLine(
-    endpointStatus,
-    isConfigured
-      ? `Endpoint: ${activeEndpoint}${gatewayEndpoint ? " (gateway)" : ""}`
-      : "Endpoint: not configured",
-    !isConfigured
-  );
 };
 
 form.addEventListener("submit", async (event) => {
@@ -904,7 +878,6 @@ form.addEventListener("submit", async (event) => {
 const init = async () => {
   await loadRegistryConfig();
   warnIfOriginMissing();
-  updateEndpointStatus();
   updateSendState();
   updateCancelState();
   stopThinking();

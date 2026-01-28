@@ -125,10 +125,6 @@ body {
   color: var(--muted);
 }
 
-.status-line.warning {
-  color: var(--edge-red);
-}
-
 .status-pill {
   display: inline-flex;
   align-items: center;
