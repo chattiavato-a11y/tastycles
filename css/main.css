@@ -352,7 +352,12 @@ body {
   font-size: 0.75rem;
   color: var(--muted);
   min-width: 0;
-  flex: 1 1 140px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.voice-helper:empty {
+  display: none;
 }
 
 .send-btn {
