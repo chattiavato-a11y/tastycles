@@ -23,12 +23,13 @@ const OPS_ASSET_ID = OPS_ASSET_BY_ORIGIN[window.location.origin] || "";
 window.OPS_ASSET_BY_ORIGIN = OPS_ASSET_BY_ORIGIN;
 window.OPS_ASSET_ID = OPS_ASSET_ID;
 
+const DEFAULT_ORIGIN = window.location.origin;
 const defaultConfig = {
   assetRegistry: "worker_files/worker.assets.json",
-  workerEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
-  assistantEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/chat",
-  voiceEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/voice",
-  ttsEndpoint: "https://drastic-measures.grabem-holdem-nuts-right.workers.dev/api/tts",
+  workerEndpoint: DEFAULT_ORIGIN,
+  assistantEndpoint: `${DEFAULT_ORIGIN}/api/chat`,
+  voiceEndpoint: `${DEFAULT_ORIGIN}/api/voice`,
+  ttsEndpoint: `${DEFAULT_ORIGIN}/api/tts`,
   gatewayEndpoint: "",
   workerEndpointAssetId:
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
