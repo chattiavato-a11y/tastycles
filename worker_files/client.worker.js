@@ -1,5 +1,6 @@
 (() => {
-  const DEFAULT_ENDPOINT = window.location.origin;
+  const DEFAULT_ENDPOINT =
+    "https://drastic-measures.grabem-holdem-nuts-right.workers.dev";
   const DEFAULT_CONFIG = {
     assetRegistry: "worker_files/worker.assets.json",
     workerEndpoint: DEFAULT_ENDPOINT,
