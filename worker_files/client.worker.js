@@ -1,6 +1,6 @@
 (() => {
   const DEFAULT_ENDPOINT =
-    "https://drastic-measures.grabem-holdem-nuts-right.workers.dev";
+    "https://drastic-measures.rulathemtodos.workers.dev";
   const DEFAULT_CONFIG = {
     assetRegistry: "worker_files/worker.assets.json",
     workerEndpoint: DEFAULT_ENDPOINT,
@@ -9,7 +9,7 @@
     allowedOrigins: [
       "https://www.gabo.io",
       "https://gabo.io",
-      "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
+      "https://drastic-measures.rulathemtodos.workers.dev",
       "http://localhost:3000",
       "http://localhost:5173",
       "http://127.0.0.1:5500",

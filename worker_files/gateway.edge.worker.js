@@ -45,7 +45,7 @@ const ORIGIN_ASSET_ID = new Map([
 
   // OPTIONAL: keep ONLY if you actually serve a browser UI from this Worker domain
   [
-    "https://drastic-measures.grabem-holdem-nuts-right.workers.dev",
+    "https://drastic-measures.rulathemtodos.workers.dev",
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
   ],
 ]);
