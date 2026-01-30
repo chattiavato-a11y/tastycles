@@ -1,5 +1,5 @@
 /**
- * drastic-measures — GATEWAY (aligned to repo gateway worker)
+ * gateway.worker.js — drastic-measures — GATEWAY (repo parity)
  *
  * + ASSET-ID ENFORCED (Origin -> AssetID)
  * + Clean/scan/sanitize BEFORE Guard + Upstream
@@ -22,62 +22,6 @@
  * - So `https://chattiavato-a11y.github.io/tastycles/` is covered by the Origin:
  *   `https://chattiavato-a11y.github.io`
  */
-
-const GATEWAY_CONFIG = {
-  version: 1,
-  environment: "production",
-  gateway_base_url: "https://drastic-measures.rulathemtodos.workers.dev",
-  assistant_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/chat",
-  voice_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice",
-  voice_stt_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice?mode=stt",
-  voice_chat_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice?mode=chat",
-  tts_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/tts",
-  cors: {
-    allowed_origins: [
-      "https://gabo.io",
-      "https://www.gabo.io",
-      "https://chattiavato-a11y.github.io",
-      "https://drastic-measures.rulathemtodos.workers.dev",
-    ],
-  },
-  asset_identity: {
-    header_name: "x-ops-asset-id",
-    by_origin: {
-      "https://www.gabo.io":
-        "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
-      "https://gabo.io":
-        "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
-      "https://chattiavato-a11y.github.io":
-        "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
-      "https://drastic-measures.rulathemtodos.workers.dev":
-        "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-    },
-  },
-  request_defaults: {
-    accept: "text/event-stream",
-    content_type: "application/json; charset=utf-8",
-    voice_timeout_sec: 120,
-  },
-  ui_language_headers: {
-    lang_hint: "x-gabo-lang-hint",
-    lang_list: "x-gabo-lang-list",
-    voice_language: "x-gabo-voice-language",
-  },
-  expected_response_headers: {
-    asset_verified: "x-gabo-asset-verified",
-    lang_iso2: "x-gabo-lang-iso2",
-    model: "x-gabo-model",
-    translated: "x-gabo-translated",
-    embeddings: "x-gabo-embeddings",
-    stt_iso2: "x-gabo-stt-iso2",
-    tts_iso2: "x-gabo-tts-iso2",
-    voice_timeout_sec: "x-gabo-voice-timeout-sec",
-  },
-  dev: {
-    enabled: false,
-    allowed_origins: [],
-  },
-};
 
 // -------------------------
 // Allowed Origins + Asset IDs (Origin -> AssetID)
@@ -319,7 +263,7 @@ function lastUserText(messages) {
 }
 
 // -------------------------
-// Language (multi-language) — repo-style: meta wins, then heuristic, then model
+// Language (multi-language) — meta wins, then heuristic, then model
 // -------------------------
 function normalizeIso2(code) {
   const s = safeTextOnly(code || "").toLowerCase();
@@ -355,35 +299,35 @@ function detectLangIso2Heuristic(text) {
 
   // Spanish
   if (/[ñáéíóúü¿¡]/i.test(t)) return "es";
-  const esHits = ["hola","gracias","por favor","buenos","buenas","necesito","ayuda","quiero","donde","qué","cuánto","porque"]
-    .filter((w) => t.includes(w)).length;
+  const esHits = ["hola", "gracias", "por favor", "buenos", "buenas", "necesito", "ayuda", "quiero", "donde", "qué", "cuánto", "porque"].filter(
+    (w) => t.includes(w)
+  ).length;
   if (esHits >= 2) return "es";
 
   // Portuguese
   if (/[ãõç]/i.test(t)) return "pt";
-  const ptHits = ["olá","ola","obrigado","obrigada","por favor","você","vocês","não","nao","tudo bem"]
-    .filter((w) => t.includes(w)).length;
+  const ptHits = ["olá", "ola", "obrigado", "obrigada", "por favor", "você", "vocês", "não", "nao", "tudo bem"].filter((w) =>
+    t.includes(w)
+  ).length;
   if (ptHits >= 2) return "pt";
 
   // French
-  const frHits = ["bonjour","salut","merci","s'il","s’il","vous","au revoir","ça va","comment","aujourd"]
-    .filter((w) => t.includes(w)).length;
+  const frHits = ["bonjour", "salut", "merci", "s'il", "s’il", "vous", "au revoir", "ça va", "comment", "aujourd"].filter((w) =>
+    t.includes(w)
+  ).length;
   if (frHits >= 2 || /[àâçéèêëîïôûùüÿœ]/i.test(t)) return "fr";
 
   // German
   if (/[äöüß]/i.test(t)) return "de";
-  const deHits = ["hallo","danke","bitte","und","ich","nicht","wie geht","heute"]
-    .filter((w) => t.includes(w)).length;
+  const deHits = ["hallo", "danke", "bitte", "und", "ich", "nicht", "wie geht", "heute"].filter((w) => t.includes(w)).length;
   if (deHits >= 2) return "de";
 
   // Italian
-  const itHits = ["ciao","grazie","per favore","come va","oggi","buongiorno","buonasera"]
-    .filter((w) => t.includes(w)).length;
+  const itHits = ["ciao", "grazie", "per favore", "come va", "oggi", "buongiorno", "buonasera"].filter((w) => t.includes(w)).length;
   if (itHits >= 2) return "it";
 
   // Indonesian
-  const idHits = ["halo","terima kasih","tolong","selamat","bagaimana","hari ini"]
-    .filter((w) => t.includes(w)).length;
+  const idHits = ["halo", "terima kasih", "tolong", "selamat", "bagaimana", "hari ini"].filter((w) => t.includes(w)).length;
   if (idHits >= 2) return "id";
 
   return "";
@@ -398,12 +342,17 @@ async function detectLangIso2ViaModel(env, text) {
       stream: false,
       max_tokens: 6,
       messages: [
-        { role: "system", content: "Return ONLY the ISO 639-1 language code (two letters). If unsure, return 'und'. No extra text." },
+        {
+          role: "system",
+          content: "Return ONLY the ISO 639-1 language code (two letters). If unsure, return 'und'. No extra text.",
+        },
         { role: "user", content: `Text:\n${sample}` },
       ],
     });
 
-    const raw = String(out?.response || out?.result?.response || out?.text || out || "").trim().toLowerCase();
+    const raw = String(out?.response || out?.result?.response || out?.text || out || "")
+      .trim()
+      .toLowerCase();
     const m = raw.match(/\b([a-z]{2}|und)\b/);
     return m ? m[1] : "und";
   } catch {
@@ -445,7 +394,7 @@ function parseGuardResult(res) {
 }
 
 function sanitizeMeta(metaIn) {
-  const meta = (metaIn && typeof metaIn === "object") ? metaIn : {};
+  const meta = metaIn && typeof metaIn === "object" ? metaIn : {};
   const out = {};
 
   const lang = normalizeIso2(meta.lang_iso2 || "");
@@ -569,7 +518,10 @@ function extractJsonObjectsFromBuffer(buffer) {
       continue;
     }
 
-    if (ch === '"') { inStr = true; continue; }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
     if (ch === "{") depth++;
     if (ch === "}") depth--;
 
@@ -579,7 +531,7 @@ function extractJsonObjectsFromBuffer(buffer) {
     }
   }
 
-  const rest = (start === -1) ? "" : buffer.slice(start);
+  const rest = start === -1 ? "" : buffer.slice(start);
   return { chunks: out, rest };
 }
 
@@ -684,7 +636,11 @@ function bridgeUpstreamToSSE(upstreamBody) {
 
           for (const s of chunks) {
             let obj;
-            try { obj = JSON.parse(s); } catch { continue; }
+            try {
+              obj = JSON.parse(s);
+            } catch {
+              continue;
+            }
             const delta = getDeltaFromObj(obj);
             if (delta) controller.enqueue(encoder.encode(sseDataFrame(delta)));
           }
@@ -698,8 +654,12 @@ function bridgeUpstreamToSSE(upstreamBody) {
       } catch {
         controller.enqueue(encoder.encode("event: error\ndata: stream_error\n\n"));
       } finally {
-        try { reader.releaseLock(); } catch {}
-        try { controller.close(); } catch {}
+        try {
+          reader.releaseLock();
+        } catch {}
+        try {
+          controller.close();
+        } catch {}
       }
     },
   });
@@ -852,7 +812,11 @@ export default {
       if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
 
       let body;
-      try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        return json(400, { error: "Invalid JSON" }, baseExtra);
+      }
 
       const messages = normalizeMessages(body.messages);
       if (!messages.length) return json(400, { error: "messages[] required" }, baseExtra);
@@ -867,16 +831,22 @@ export default {
 
       // Guard at edge
       let guardRes;
-      try { guardRes = await env.AI.run(MODEL_GUARD, { messages }); }
-      catch { return json(502, { error: "Safety check unavailable" }, baseExtra); }
+      try {
+        guardRes = await env.AI.run(MODEL_GUARD, { messages });
+      } catch {
+        return json(502, { error: "Safety check unavailable" }, baseExtra);
+      }
 
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, baseExtra);
 
       // Call Upstream
       let upstreamResp;
-      try { upstreamResp = await callUpstream(env, { messages, meta: metaSafe }); }
-      catch (e) { return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, baseExtra); }
+      try {
+        upstreamResp = await callUpstream(env, { messages, meta: metaSafe });
+      } catch (e) {
+        return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, baseExtra);
+      }
 
       if (!upstreamResp.ok) {
         const t = await upstreamResp.text().catch(() => "");
@@ -900,7 +870,11 @@ export default {
       if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
 
       let body;
-      try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        return json(400, { error: "Invalid JSON" }, baseExtra);
+      }
 
       const text = sanitizeContent(body?.text || "");
       if (!text) return json(400, { error: "text required" }, baseExtra);
@@ -938,7 +912,11 @@ export default {
         if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
 
         let body;
-        try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          return json(400, { error: "Invalid JSON" }, baseExtra);
+        }
 
         priorMessages = normalizeMessages(body.messages);
         metaSafe = sanitizeMeta(body.meta);
@@ -964,8 +942,11 @@ export default {
 
       // Whisper STT
       let sttOut;
-      try { sttOut = await runWhisper(env, audioU8); }
-      catch (e) { return json(502, { error: "Whisper unavailable", detail: String(e?.message || e) }, baseExtra); }
+      try {
+        sttOut = await runWhisper(env, audioU8);
+      } catch (e) {
+        return json(502, { error: "Whisper unavailable", detail: String(e?.message || e) }, baseExtra);
+      }
 
       const transcriptRaw = sttOut?.text || sttOut?.result?.text || sttOut?.response?.text || "";
       const transcript = sanitizeContent(transcriptRaw);
@@ -983,9 +964,7 @@ export default {
         return json(200, { transcript, lang_iso2: langIso2 || "und", voice_timeout_sec: 120 }, extra);
       }
 
-      const messages = priorMessages.length
-        ? [...priorMessages, { role: "user", content: transcript }]
-        : [{ role: "user", content: transcript }];
+      const messages = priorMessages.length ? [...priorMessages, { role: "user", content: transcript }] : [{ role: "user", content: transcript }];
 
       if (!metaSafe.lang_iso2 || metaSafe.lang_iso2 === "auto" || metaSafe.lang_iso2 === "und") {
         metaSafe.lang_iso2 = langIso2 || "und";
@@ -993,16 +972,22 @@ export default {
 
       // Guard at edge
       let guardRes;
-      try { guardRes = await env.AI.run(MODEL_GUARD, { messages }); }
-      catch { return json(502, { error: "Safety check unavailable" }, extra); }
+      try {
+        guardRes = await env.AI.run(MODEL_GUARD, { messages });
+      } catch {
+        return json(502, { error: "Safety check unavailable" }, extra);
+      }
 
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, extra);
 
       // Call Upstream
       let upstreamResp;
-      try { upstreamResp = await callUpstream(env, { messages, meta: metaSafe }); }
-      catch (e) { return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, extra); }
+      try {
+        upstreamResp = await callUpstream(env, { messages, meta: metaSafe });
+      } catch (e) {
+        return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, extra);
+      }
 
       if (!upstreamResp.ok) {
         const t = await upstreamResp.text().catch(() => "");
