@@ -1,282 +1,314 @@
-(() => {
-  const DEFAULT_ENDPOINT =
-    "https://drastic-measures.rulathemtodos.workers.dev";
-  const DEFAULT_CONFIG = {
-    assetRegistry: "worker_files/worker.assets.json",
-    workerEndpoint: DEFAULT_ENDPOINT,
-    workerEndpointAssetId:
-      "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-    allowedOrigins: [
-      "https://www.gabo.io",
-      "https://gabo.io",
-      "https://drastic-measures.rulathemtodos.workers.dev",
-      "http://localhost:3000",
-      "http://localhost:5173",
-      "http://127.0.0.1:5500",
-      "https://chattiavato-a11y.github.io",
-    ],
-    allowedOriginAssetIds: [
-      "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
-      "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
-      "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-      "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-      "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-      "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-      "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
-    ],
+/**
+ * worker_files/client.worker.js — Repo UI → CF Gateway (drastic-measures)
+ *
+ * What this does:
+ * - Loads worker.config.json (works from GitHub Pages subpaths like /tastycles/)
+ * - Resolves endpoints (chat/voice/tts)
+ * - Computes correct x-ops-asset-id for the CURRENT PAGE Origin
+ * - Sends requests to the Worker with required headers
+ * - Streams SSE safely (NO trimming, keeps payload intact)
+ */
+
+/* -------------------------
+   0) Config loading (path-safe)
+------------------------- */
+
+const CONFIG_REL_PATH = "worker_files/worker.config.json";
+
+let _cfgCache = null;
+let _cfgCacheAt = 0;
+const CFG_CACHE_TTL_MS = 60_000; // client-side cache only (safe)
+
+/** Resolve config URL relative to the current page (supports GH Pages subpaths). */
+function resolveConfigUrl() {
+  return new URL(CONFIG_REL_PATH, document.baseURI).toString();
+}
+
+async function loadWorkerConfig(force = false) {
+  const now = Date.now();
+  if (!force && _cfgCache && now - _cfgCacheAt < CFG_CACHE_TTL_MS) return _cfgCache;
+
+  const url = resolveConfigUrl();
+  const resp = await fetch(url, { method: "GET", cache: "no-store" });
+  if (!resp.ok) throw new Error(`worker.config.json fetch failed: ${resp.status}`);
+
+  const cfg = await resp.json();
+  _cfgCache = normalizeConfig(cfg);
+  _cfgCacheAt = now;
+  return _cfgCache;
+}
+
+function normalizeConfig(cfg) {
+  const c = (cfg && typeof cfg === "object") ? cfg : {};
+  const workerEndpoint = String(c.workerEndpoint || "").trim().replace(/\/$/, "");
+  const assistantEndpoint = String(c.assistantEndpoint || "").trim();
+  const voiceEndpoint = String(c.voiceEndpoint || "").trim();
+  const ttsEndpoint = String(c.ttsEndpoint || "").trim();
+
+  const out = {
+    ...c,
+    workerEndpoint,
+    assistantEndpoint: assistantEndpoint || (workerEndpoint ? `${workerEndpoint}/api/chat` : ""),
+    voiceEndpoint: voiceEndpoint || (workerEndpoint ? `${workerEndpoint}/api/voice` : ""),
+    ttsEndpoint: ttsEndpoint || (workerEndpoint ? `${workerEndpoint}/api/tts` : ""),
+    gatewayEndpoint: String(c.gatewayEndpoint || workerEndpoint || "").trim().replace(/\/$/, ""),
+    requiredHeaders: Array.isArray(c.requiredHeaders) ? c.requiredHeaders : ["Content-Type", "Accept", "X-Ops-Asset-Id"],
+    allowedOrigins: Array.isArray(c.allowedOrigins) ? c.allowedOrigins : [],
+    allowedOriginAssetIds: Array.isArray(c.allowedOriginAssetIds) ? c.allowedOriginAssetIds : [],
   };
 
-  const resolveConfigUrl = () => {
-    const scriptUrl = document.currentScript?.src;
-    if (scriptUrl) {
-      return new URL("worker.config.json", scriptUrl).toString();
+  if (!out.workerEndpoint) throw new Error("workerEndpoint missing in worker.config.json");
+  if (!out.assistantEndpoint) throw new Error("assistantEndpoint could not be resolved");
+  if (!out.voiceEndpoint) throw new Error("voiceEndpoint could not be resolved");
+  if (!out.ttsEndpoint) throw new Error("ttsEndpoint could not be resolved");
+
+  return out;
+}
+
+/* -------------------------
+   1) Asset-ID (Origin → AssetId)
+------------------------- */
+
+function pageOrigin() {
+  // Browser origin NEVER includes path; exactly what Worker checks.
+  return String(window.location.origin || "").trim();
+}
+
+function resolveAssetIdForOrigin(cfg, origin) {
+  const o = String(origin || "").trim();
+  const origins = cfg.allowedOrigins || [];
+  const ids = cfg.allowedOriginAssetIds || [];
+
+  // strict positional mapping: origins[i] -> ids[i]
+  for (let i = 0; i < origins.length; i++) {
+    if (String(origins[i]).trim() === o) {
+      const id = String(ids[i] || "").trim();
+      return id;
     }
-    return new URL("worker_files/worker.config.json", window.location.href).toString();
-  };
+  }
+  return "";
+}
 
-  const CONFIG_URL = resolveConfigUrl();
-  let config = { ...DEFAULT_CONFIG };
-  let originToAssetId = new Map();
-  let assetRegistryEntries = [];
-  let configPromise = null;
+function buildHeaders(cfg, acceptValue, contentTypeValue) {
+  const origin = pageOrigin();
+  const assetId = resolveAssetIdForOrigin(cfg, origin);
 
-  const normalizeOrigin = (value) => {
-    if (!value) return "";
-    try {
-      return new URL(String(value), window.location.origin).origin.toLowerCase();
-    } catch (error) {
-      return String(value).trim().replace(/\/$/, "").toLowerCase();
-    }
-  };
+  if (!assetId) {
+    throw new Error(
+      `No asset id mapping for Origin: ${origin}. Update worker.config.json allowedOrigins/allowedOriginAssetIds.`
+    );
+  }
 
-  const findAssetIdForOrigin = (origin) => {
-    if (!origin) return "";
-    const normalizedOrigin = normalizeOrigin(origin);
-    const match = assetRegistryEntries.find((entry) => {
-      const sourceOrigin = normalizeOrigin(entry?.source?.origin_url);
-      const servingOrigin = normalizeOrigin(entry?.serving?.primary_url);
-      const fallbackOrigin = normalizeOrigin(entry?.serving?.fallback_url);
-      return (
-        normalizedOrigin &&
-        (normalizedOrigin === sourceOrigin ||
-          normalizedOrigin === servingOrigin ||
-          normalizedOrigin === fallbackOrigin)
-      );
-    });
-    return match?.asset_id || "";
-  };
+  const h = new Headers();
+  if (contentTypeValue) h.set("content-type", contentTypeValue);
+  if (acceptValue) h.set("accept", acceptValue);
 
-  const rebuildOriginMap = () => {
-    originToAssetId = new Map();
-    config.allowedOrigins.forEach((origin, index) => {
-      const assetId =
-        findAssetIdForOrigin(origin) || config.allowedOriginAssetIds[index] || "";
-      const normalizedOrigin = normalizeOrigin(origin);
-      if (normalizedOrigin && assetId) {
-        originToAssetId.set(normalizedOrigin, assetId);
-      }
-    });
-  };
+  // required by Worker
+  h.set("x-ops-asset-id", assetId);
 
-  const getAssetIdForOrigin = (origin = window.location.origin) =>
-    originToAssetId.get(normalizeOrigin(origin)) ||
-    findAssetIdForOrigin(origin) ||
-    "";
+  return h;
+}
 
-  const getOverrideAssetId = (origin = window.location.origin) => {
-    const directOverride = window.OPS_ASSET_ID;
-    if (directOverride) return directOverride;
-    const mapping = window.OPS_ASSET_BY_ORIGIN;
-    if (mapping && typeof mapping === "object") {
-      const normalizedOrigin = normalizeOrigin(origin);
-      if (normalizedOrigin && mapping[normalizedOrigin]) {
-        return mapping[normalizedOrigin];
-      }
-    }
-    return "";
-  };
+/* -------------------------
+   2) SSE parsing (payload-preserving)
+------------------------- */
 
-  const loadAssetRegistry = async (registryUrl) => {
-    const response = await fetch(registryUrl, { cache: "no-store" });
-    if (!response.ok) return [];
-    const registry = await response.json();
-    if (Array.isArray(registry.assets)) return registry.assets;
-    if (Array.isArray(registry)) return registry;
-    return [];
-  };
+function splitSSEBlocks(buffer) {
+  const blocks = [];
+  let idx;
+  while ((idx = buffer.indexOf("\n\n")) !== -1) {
+    blocks.push(buffer.slice(0, idx));
+    buffer = buffer.slice(idx + 2);
+  }
+  return { blocks, rest: buffer };
+}
 
-  const resolveAssetUrl = (assets, assetId) => {
-    if (!assetId) return "";
-    const asset = assets.find((entry) => entry.asset_id === assetId);
-    return asset?.serving?.primary_url || asset?.source?.origin_url || "";
-  };
+function parseSSEBlock(block) {
+  const lines = String(block || "").split("\n");
+  let event = "";
+  const dataLines = [];
 
-  const loadConfig = async () => {
-    try {
-      const response = await fetch(CONFIG_URL, { cache: "no-store" });
-      if (!response.ok) {
-        rebuildOriginMap();
-        return;
-      }
-      const data = await response.json();
-      config = {
-        ...config,
-        ...data,
-        allowedOrigins: Array.isArray(data.allowedOrigins)
-          ? data.allowedOrigins
-          : config.allowedOrigins,
-        allowedOriginAssetIds: Array.isArray(data.allowedOriginAssetIds)
-          ? data.allowedOriginAssetIds
-          : config.allowedOriginAssetIds,
-      };
+  for (const line of lines) {
+    if (!line) continue;
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) dataLines.push(line.slice(5)); // DO NOT trim payload
+    // ignore ":" comments and other fields
+  }
 
-      if (data.workerEndpointAssetId) {
-        const registryUrl = data.assetRegistry || config.assetRegistry;
-        const assets = await loadAssetRegistry(registryUrl);
-        assetRegistryEntries = assets;
-        const resolved = resolveAssetUrl(assets, data.workerEndpointAssetId);
-        if (resolved) {
-          config.workerEndpoint = resolved;
+  return { event, data: dataLines.join("\n") };
+}
+
+async function streamSSEFromResponse(resp, onData) {
+  const reader = resp.body?.getReader?.();
+  if (!reader) throw new Error("Response body is not a readable stream");
+
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buf += decoder.decode(value, { stream: true });
+
+      // normalize CRLF / CR → LF (matches gateway behavior)
+      buf = buf.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+      const { blocks, rest } = splitSSEBlocks(buf);
+      buf = rest;
+
+      for (const b of blocks) {
+        const { event, data } = parseSSEBlock(b);
+
+        const dataTrim = String(data || "").trim();
+        if (event === "done" || dataTrim === "[DONE]") return;
+
+        if (event === "error") {
+          throw new Error(dataTrim || "stream_error");
         }
+
+        if (data !== "") onData(data); // keep payload exactly as provided
       }
-
-      if (!config.workerEndpoint && data.assistantEndpoint) {
-        try {
-          const assistantUrl = new URL(
-            data.assistantEndpoint,
-            window.location.origin
-          );
-          if (assistantUrl.pathname.endsWith("/api/chat")) {
-            assistantUrl.pathname = assistantUrl.pathname.replace(
-              /\/api\/chat\/?$/,
-              ""
-            );
-          }
-          assistantUrl.search = "";
-          assistantUrl.hash = "";
-          config.workerEndpoint = assistantUrl.toString().replace(/\/$/, "");
-        } catch (error) {
-          console.warn("Unable to parse assistant endpoint.", error);
-        }
-      }
-    } catch (error) {
-      console.warn("Unable to load Worker client config.", error);
-    } finally {
-      rebuildOriginMap();
     }
-  };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+}
 
-  const init = async () => {
-    if (!configPromise) {
-      configPromise = loadConfig();
-    }
-    await configPromise;
-  };
+/* -------------------------
+   3) Public API (Chat / Voice / TTS)
+------------------------- */
 
-  const getEndpoint = () => config.workerEndpoint;
-  const getConfig = () => ({ ...config });
+/**
+ * Chat (POST /api/chat)
+ * @param {{messages:Array, meta?:Object, onDelta:(t:string)=>void, signal?:AbortSignal}} args
+ */
+export async function postChat(args) {
+  const { messages, meta = {}, onDelta, signal } = args || {};
+  if (!Array.isArray(messages) || messages.length === 0) throw new Error("messages[] required");
+  if (typeof onDelta !== "function") throw new Error("onDelta callback required");
 
-  const buildHeaders = ({ accept, contentType, extraHeaders } = {}) => {
-    const assetId = getOverrideAssetId() || getAssetIdForOrigin();
-    if (!assetId) {
-      throw new Error(
-        `Origin not registered: ${window.location.origin}. Add it to worker.config.json allowedOrigins + allowedOriginAssetIds.`
-      );
-    }
-    const headers = new Headers();
-    if (accept) headers.set("Accept", accept);
-    if (contentType) headers.set("Content-Type", contentType);
-    headers.set("X-Ops-Asset-Id", assetId);
-    if (extraHeaders) {
-      Object.entries(extraHeaders).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          headers.set(key, value);
-        }
-      });
-    }
-    return headers;
-  };
+  const cfg = await loadWorkerConfig(false);
 
-  const postChat = async (payload, options = {}) => {
-    await init();
-    const endpoint = getEndpoint();
-    if (!endpoint) throw new Error("Worker endpoint not configured.");
-    return fetch(`${endpoint}/api/chat`, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-store",
-      headers: buildHeaders({
-        accept: "text/event-stream",
-        contentType: "application/json",
-        extraHeaders: options.extraHeaders,
-      }),
-      body: JSON.stringify(payload),
-      signal: options.signal,
-    });
-  };
+  const headers = buildHeaders(cfg, "text/event-stream", "application/json; charset=utf-8");
+  const body = JSON.stringify({ messages, meta });
 
-  const postVoiceSTT = async (blob, options = {}) => {
-    await init();
-    const endpoint = getEndpoint();
-    if (!endpoint) throw new Error("Worker endpoint not configured.");
-    return fetch(`${endpoint}/api/voice?mode=stt`, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-store",
-      headers: buildHeaders({
-        accept: "application/json",
-        contentType: blob?.type || "audio/webm",
-        extraHeaders: options.extraHeaders,
-      }),
-      body: blob,
-      signal: options.signal,
-    });
-  };
+  const resp = await fetch(cfg.assistantEndpoint, {
+    method: "POST",
+    headers,
+    body,
+    signal,
+  });
 
-  const postVoiceStream = async (payload, options = {}) => {
-    await init();
-    const endpoint = getEndpoint();
-    if (!endpoint) throw new Error("Worker endpoint not configured.");
-    return fetch(`${endpoint}/api/voice`, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-store",
-      headers: buildHeaders({
-        accept: "text/event-stream",
-        contentType: "application/json",
-        extraHeaders: options.extraHeaders,
-      }),
-      body: JSON.stringify(payload),
-      signal: options.signal,
-    });
-  };
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`chat failed: ${resp.status} ${t.slice(0, 1200)}`);
+  }
 
-  const postTTS = async (payload, options = {}) => {
-    await init();
-    const endpoint = getEndpoint();
-    if (!endpoint) throw new Error("Worker endpoint not configured.");
-    return fetch(`${endpoint}/api/tts`, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-store",
-      headers: buildHeaders({
-        accept: "audio/mpeg",
-        contentType: "application/json",
-        extraHeaders: options.extraHeaders,
-      }),
-      body: JSON.stringify(payload),
-      signal: options.signal,
-    });
-  };
+  await streamSSEFromResponse(resp, onDelta);
+  return true;
+}
 
-  window.WorkerClient = {
-    init,
-    getConfig,
-    getEndpoint,
-    buildHeaders,
-    postChat,
-    postVoiceSTT,
-    postVoiceStream,
-    postTTS,
-  };
-})();
+/**
+ * Voice STT (POST /api/voice?mode=stt)
+ * Accepts Blob (recommended) or ArrayBuffer/Uint8Array
+ * @param {{audio:Blob|ArrayBuffer|Uint8Array, signal?:AbortSignal}} args
+ */
+export async function postVoiceSTT(args) {
+  const { audio, signal } = args || {};
+  if (!audio) throw new Error("audio required");
+
+  const cfg = await loadWorkerConfig(false);
+
+  // For binary: DO NOT set content-type manually; browser will set if Blob has type.
+  const headers = buildHeaders(cfg, "application/json", null);
+
+  let body;
+  if (audio instanceof Blob) body = audio;
+  else if (audio instanceof Uint8Array) body = audio.buffer;
+  else if (audio instanceof ArrayBuffer) body = audio;
+  else throw new Error("audio must be Blob | ArrayBuffer | Uint8Array");
+
+  const url = `${cfg.voiceEndpoint}?mode=stt`;
+  const resp = await fetch(url, { method: "POST", headers, body, signal });
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`voice stt failed: ${resp.status} ${t.slice(0, 1200)}`);
+  }
+
+  return resp.json();
+}
+
+/**
+ * Voice Chat (POST /api/voice?mode=chat) — streams SSE deltas
+ * @param {{audio:Blob|ArrayBuffer|Uint8Array, messages?:Array, meta?:Object, onDelta:(t:string)=>void, signal?:AbortSignal}} args
+ */
+export async function postVoiceChat(args) {
+  const { audio, messages = [], meta = {}, onDelta, signal } = args || {};
+  if (!audio) throw new Error("audio required");
+  if (typeof onDelta !== "function") throw new Error("onDelta callback required");
+
+  const cfg = await loadWorkerConfig(false);
+
+  // Use JSON wrapper when you need to include prior messages/meta (most UIs do).
+  const headers = buildHeaders(cfg, "text/event-stream", "application/json; charset=utf-8");
+
+  // Prefer audio_b64 only if you already have it. Otherwise convert to bytes array (keeps serverless).
+  let audioBytes;
+  if (audio instanceof Blob) {
+    const ab = await audio.arrayBuffer();
+    audioBytes = Array.from(new Uint8Array(ab));
+  } else if (audio instanceof Uint8Array) {
+    audioBytes = Array.from(audio);
+  } else if (audio instanceof ArrayBuffer) {
+    audioBytes = Array.from(new Uint8Array(audio));
+  } else {
+    throw new Error("audio must be Blob | ArrayBuffer | Uint8Array");
+  }
+
+  const body = JSON.stringify({ messages, meta, audio: audioBytes });
+
+  const url = `${cfg.voiceEndpoint}?mode=chat`;
+  const resp = await fetch(url, { method: "POST", headers, body, signal });
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => "");
+    throw new Error(`voice chat failed: ${resp.status} ${t.slice(0, 1200)}`);
+  }
+
+  await streamSSEFromResponse(resp, onDelta);
+  return true;
+}
+
+/**
+ * TTS (POST /api/tts) — returns { blob, contentType }
+ * @param {{text:string, lang_iso2?:string, signal?:AbortSignal}} args
+ */
+export async function postTTS(args) {
+  const { text, lang_iso2 = "en", signal } = args || {};
+  const t = String(text || "").trim();
+  if (!t) throw new Error("text required");
+
+  const cfg = await loadWorkerConfig(false);
+
+  const headers = buildHeaders(cfg, "audio/*", "application/json; charset=utf-8");
+  const body = JSON.stringify({ text: t, lang_iso2 });
+
+  const resp = await fetch(cfg.ttsEndpoint, { method: "POST", headers, body, signal });
+
+  if (!resp.ok) {
+    const e = await resp.text().catch(() => "");
+    throw new Error(`tts failed: ${resp.status} ${e.slice(0, 1200)}`);
+  }
+
+  const ct = resp.headers.get("content-type") || "audio/mpeg";
+  const blob = await resp.blob();
+  return { blob, contentType: ct };
+}
+
+/* Optional: expose config getter for debugging/UI */
+export async function getWorkerConfig(force = false) {
+  return loadWorkerConfig(!!force);
+}
