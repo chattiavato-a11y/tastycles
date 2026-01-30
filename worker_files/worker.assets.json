@@ -1,56 +1,6 @@
 {
   "assets": [
     {
-      "asset_id": "6bb207bc4d9e1871237d27a0089d0d977643e4ba3cb40bf306980c51985c7c96fcc3adc8b5b9590941f125278fc62e9d72485180cbb21c99bb103debf99e494e",
-      "asset_type": "config",
-      "display_name": "Gabo Worker Client Config",
-      "classification": "public",
-      "source": {
-        "origin_url": "https://gabo.io/worker_files/worker.config.json",
-        "repository": "tastycles",
-        "path": "worker_files/worker.config.json",
-        "version": "v1"
-      },
-      "integrity": {
-        "sha512": "6bb207bc4d9e1871237d27a0089d0d977643e4ba3cb40bf306980c51985c7c96fcc3adc8b5b9590941f125278fc62e9d72485180cbb21c99bb103debf99e494e"
-      },
-      "serving": {
-        "primary_url": "https://gabo.io/worker_files/worker.config.json",
-        "fallback_url": "https://gabo.io/worker_files/worker.config.json",
-        "cache_ttl_seconds": 300
-      },
-      "policy": {
-        "retention_days": 365,
-        "allowed_origins": [
-          "https://www.gabo.io",
-          "https://gabo.io",
-          "https://chattiavato-a11y.github.io"
-        ],
-        "required_headers": ["Content-Type", "Accept"]
-      },
-      "audit": {
-        "created_at": "2025-02-14T00:00:00Z",
-        "updated_at": "2026-02-01T00:00:00Z",
-        "change_log": [
-          {
-            "by": "automation",
-            "action": "initial registry record for worker client config",
-            "when": "2025-02-14T00:00:00Z"
-          },
-          {
-            "by": "automation",
-            "action": "remove non-.io origins and align registry urls",
-            "when": "2026-01-23T18:50:54Z"
-          },
-          {
-            "by": "automation",
-            "action": "swap worker config to asset ids and asset registry",
-            "when": "2026-02-01T00:00:00Z"
-          }
-        ]
-      }
-    },
-    {
       "asset_id": "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
       "asset_type": "config",
       "display_name": "Gabo Worker Endpoint",
@@ -74,19 +24,18 @@
         "allowed_origins": [
           "https://www.gabo.io",
           "https://gabo.io",
-          "https://chattiavato-a11y.github.io",
-          "https://drastic-measures.rulathemtodos.workers.dev"
+          "https://chattiavato-a11y.github.io"
         ],
         "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
       },
       "audit": {
-        "created_at": "2026-01-30T00:00:00Z",
-        "updated_at": "2026-01-30T00:00:00Z",
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
         "change_log": [
           {
             "by": "automation",
-            "action": "register worker endpoint asset id (rulathemtodos) + production origins",
-            "when": "2026-01-30T00:00:00Z"
+            "action": "register worker endpoint asset id",
+            "when": "2026-02-01T00:00:00Z"
           }
         ]
       }
@@ -116,13 +65,13 @@
         "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
       },
       "audit": {
-        "created_at": "2026-01-30T00:00:00Z",
-        "updated_at": "2026-01-30T00:00:00Z",
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
         "change_log": [
           {
             "by": "automation",
             "action": "register www origin asset id",
-            "when": "2026-01-30T00:00:00Z"
+            "when": "2026-02-01T00:00:00Z"
           }
         ]
       }
@@ -152,13 +101,13 @@
         "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
       },
       "audit": {
-        "created_at": "2026-01-30T00:00:00Z",
-        "updated_at": "2026-01-30T00:00:00Z",
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
         "change_log": [
           {
             "by": "automation",
             "action": "register root origin asset id",
-            "when": "2026-01-30T00:00:00Z"
+            "when": "2026-02-01T00:00:00Z"
           }
         ]
       }
@@ -188,13 +137,13 @@
         "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
       },
       "audit": {
-        "created_at": "2026-01-30T00:00:00Z",
-        "updated_at": "2026-01-30T00:00:00Z",
+        "created_at": "2026-02-01T00:00:00Z",
+        "updated_at": "2026-02-01T00:00:00Z",
         "change_log": [
           {
             "by": "automation",
             "action": "register github pages origin asset id",
-            "when": "2026-01-30T00:00:00Z"
+            "when": "2026-02-01T00:00:00Z"
           }
         ]
       }
