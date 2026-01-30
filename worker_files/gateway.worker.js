@@ -23,6 +23,62 @@
  *   `https://chattiavato-a11y.github.io`
  */
 
+const GATEWAY_CONFIG = {
+  version: 1,
+  environment: "production",
+  gateway_base_url: "https://drastic-measures.rulathemtodos.workers.dev",
+  assistant_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/chat",
+  voice_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice",
+  voice_stt_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice?mode=stt",
+  voice_chat_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice?mode=chat",
+  tts_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/tts",
+  cors: {
+    allowed_origins: [
+      "https://gabo.io",
+      "https://www.gabo.io",
+      "https://chattiavato-a11y.github.io",
+      "https://drastic-measures.rulathemtodos.workers.dev",
+    ],
+  },
+  asset_identity: {
+    header_name: "x-ops-asset-id",
+    by_origin: {
+      "https://www.gabo.io":
+        "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
+      "https://gabo.io":
+        "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
+      "https://chattiavato-a11y.github.io":
+        "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
+      "https://drastic-measures.rulathemtodos.workers.dev":
+        "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+    },
+  },
+  request_defaults: {
+    accept: "text/event-stream",
+    content_type: "application/json; charset=utf-8",
+    voice_timeout_sec: 120,
+  },
+  ui_language_headers: {
+    lang_hint: "x-gabo-lang-hint",
+    lang_list: "x-gabo-lang-list",
+    voice_language: "x-gabo-voice-language",
+  },
+  expected_response_headers: {
+    asset_verified: "x-gabo-asset-verified",
+    lang_iso2: "x-gabo-lang-iso2",
+    model: "x-gabo-model",
+    translated: "x-gabo-translated",
+    embeddings: "x-gabo-embeddings",
+    stt_iso2: "x-gabo-stt-iso2",
+    tts_iso2: "x-gabo-tts-iso2",
+    voice_timeout_sec: "x-gabo-voice-timeout-sec",
+  },
+  dev: {
+    enabled: false,
+    allowed_origins: [],
+  },
+};
+
 // -------------------------
 // Allowed Origins + Asset IDs (Origin -> AssetID)
 // -------------------------
