@@ -1,5 +1,5 @@
 /**
- * gateway.worker.js — drastic-measures (GATEWAY)
+ * gateway.worker.js — drastic-measures — GATEWAY (repo parity)
  *
  * + ASSET-ID ENFORCED (Origin -> AssetID)
  * + Clean/scan/sanitize BEFORE Guard + Upstream
@@ -287,30 +287,33 @@ function detectLangIso2Heuristic(text) {
   const t = t0.toLowerCase();
 
   if (/[ñáéíóúü¿¡]/i.test(t)) return "es";
-  const esHits = ["hola","gracias","por favor","buenos","buenas","necesito","ayuda","quiero","donde","qué","cuánto","porque"]
-    .filter((w) => t.includes(w)).length;
+  const esHits = ["hola", "gracias", "por favor", "buenos", "buenas", "necesito", "ayuda", "quiero", "donde", "qué", "cuánto", "porque"].filter(
+    (w) => t.includes(w)
+  ).length;
   if (esHits >= 2) return "es";
 
   if (/[ãõç]/i.test(t)) return "pt";
-  const ptHits = ["olá","ola","obrigado","obrigada","por favor","você","vocês","não","nao","tudo bem"]
-    .filter((w) => t.includes(w)).length;
+  const ptHits = ["olá", "ola", "obrigado", "obrigada", "por favor", "você", "vocês", "não", "nao", "tudo bem"].filter((w) =>
+    t.includes(w)
+  ).length;
   if (ptHits >= 2) return "pt";
 
-  const frHits = ["bonjour","salut","merci","s'il","s’il","vous","au revoir","ça va","comment","aujourd"]
-    .filter((w) => t.includes(w)).length;
+  // French
+  const frHits = ["bonjour", "salut", "merci", "s'il", "s’il", "vous", "au revoir", "ça va", "comment", "aujourd"].filter((w) =>
+    t.includes(w)
+  ).length;
   if (frHits >= 2 || /[àâçéèêëîïôûùüÿœ]/i.test(t)) return "fr";
 
   if (/[äöüß]/i.test(t)) return "de";
-  const deHits = ["hallo","danke","bitte","und","ich","nicht","wie geht","heute"]
-    .filter((w) => t.includes(w)).length;
+  const deHits = ["hallo", "danke", "bitte", "und", "ich", "nicht", "wie geht", "heute"].filter((w) => t.includes(w)).length;
   if (deHits >= 2) return "de";
 
-  const itHits = ["ciao","grazie","per favore","come va","oggi","buongiorno","buonasera"]
-    .filter((w) => t.includes(w)).length;
+  // Italian
+  const itHits = ["ciao", "grazie", "per favore", "come va", "oggi", "buongiorno", "buonasera"].filter((w) => t.includes(w)).length;
   if (itHits >= 2) return "it";
 
-  const idHits = ["halo","terima kasih","tolong","selamat","bagaimana","hari ini"]
-    .filter((w) => t.includes(w)).length;
+  // Indonesian
+  const idHits = ["halo", "terima kasih", "tolong", "selamat", "bagaimana", "hari ini"].filter((w) => t.includes(w)).length;
   if (idHits >= 2) return "id";
 
   return "";
@@ -325,12 +328,17 @@ async function detectLangIso2ViaModel(env, text) {
       stream: false,
       max_tokens: 6,
       messages: [
-        { role: "system", content: "Return ONLY the ISO 639-1 language code (two letters). If unsure, return 'und'. No extra text." },
+        {
+          role: "system",
+          content: "Return ONLY the ISO 639-1 language code (two letters). If unsure, return 'und'. No extra text.",
+        },
         { role: "user", content: `Text:\n${sample}` },
       ],
     });
 
-    const raw = String(out?.response || out?.result?.response || out?.text || out || "").trim().toLowerCase();
+    const raw = String(out?.response || out?.result?.response || out?.text || out || "")
+      .trim()
+      .toLowerCase();
     const m = raw.match(/\b([a-z]{2}|und)\b/);
     return m ? m[1] : "und";
   } catch {
@@ -369,7 +377,7 @@ function parseGuardResult(res) {
 }
 
 function sanitizeMeta(metaIn) {
-  const meta = (metaIn && typeof metaIn === "object") ? metaIn : {};
+  const meta = metaIn && typeof metaIn === "object" ? metaIn : {};
   const out = {};
 
   const lang = normalizeIso2(meta.lang_iso2 || "");
@@ -487,7 +495,10 @@ function extractJsonObjectsFromBuffer(buffer) {
       continue;
     }
 
-    if (ch === '"') { inStr = true; continue; }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
     if (ch === "{") depth++;
     if (ch === "}") depth--;
 
@@ -497,7 +508,7 @@ function extractJsonObjectsFromBuffer(buffer) {
     }
   }
 
-  const rest = (start === -1) ? "" : buffer.slice(start);
+  const rest = start === -1 ? "" : buffer.slice(start);
   return { chunks: out, rest };
 }
 
@@ -599,7 +610,11 @@ function bridgeUpstreamToSSE(upstreamBody) {
 
           for (const s of chunks) {
             let obj;
-            try { obj = JSON.parse(s); } catch { continue; }
+            try {
+              obj = JSON.parse(s);
+            } catch {
+              continue;
+            }
             const delta = getDeltaFromObj(obj);
             if (delta) controller.enqueue(encoder.encode(sseDataFrame(delta)));
           }
@@ -612,8 +627,12 @@ function bridgeUpstreamToSSE(upstreamBody) {
       } catch {
         controller.enqueue(encoder.encode("event: error\ndata: stream_error\n\n"));
       } finally {
-        try { reader.releaseLock(); } catch {}
-        try { controller.close(); } catch {}
+        try {
+          reader.releaseLock();
+        } catch {}
+        try {
+          controller.close();
+        } catch {}
       }
     },
   });
@@ -766,7 +785,11 @@ export default {
       if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
 
       let body;
-      try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        return json(400, { error: "Invalid JSON" }, baseExtra);
+      }
 
       const messages = normalizeMessages(body.messages);
       if (!messages.length) return json(400, { error: "messages[] required" }, baseExtra);
@@ -781,16 +804,22 @@ export default {
 
       // Guard at edge
       let guardRes;
-      try { guardRes = await env.AI.run(MODEL_GUARD, { messages }); }
-      catch { return json(502, { error: "Safety check unavailable" }, baseExtra); }
+      try {
+        guardRes = await env.AI.run(MODEL_GUARD, { messages });
+      } catch {
+        return json(502, { error: "Safety check unavailable" }, baseExtra);
+      }
 
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, baseExtra);
 
       // Call Upstream
       let upstreamResp;
-      try { upstreamResp = await callUpstream(env, { messages, meta: metaSafe }); }
-      catch (e) { return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, baseExtra); }
+      try {
+        upstreamResp = await callUpstream(env, { messages, meta: metaSafe });
+      } catch (e) {
+        return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, baseExtra);
+      }
 
       if (!upstreamResp.ok) {
         const t = await upstreamResp.text().catch(() => "");
@@ -814,7 +843,11 @@ export default {
       if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
 
       let body;
-      try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        return json(400, { error: "Invalid JSON" }, baseExtra);
+      }
 
       const text = sanitizeContent(body?.text || "");
       if (!text) return json(400, { error: "text required" }, baseExtra);
@@ -852,7 +885,11 @@ export default {
         if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
 
         let body;
-        try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          return json(400, { error: "Invalid JSON" }, baseExtra);
+        }
 
         priorMessages = normalizeMessages(body.messages);
         metaSafe = sanitizeMeta(body.meta);
@@ -878,8 +915,11 @@ export default {
 
       // Whisper STT
       let sttOut;
-      try { sttOut = await runWhisper(env, audioU8); }
-      catch (e) { return json(502, { error: "Whisper unavailable", detail: String(e?.message || e) }, baseExtra); }
+      try {
+        sttOut = await runWhisper(env, audioU8);
+      } catch (e) {
+        return json(502, { error: "Whisper unavailable", detail: String(e?.message || e) }, baseExtra);
+      }
 
       const transcriptRaw = sttOut?.text || sttOut?.result?.text || sttOut?.response?.text || "";
       const transcript = sanitizeContent(transcriptRaw);
@@ -897,9 +937,7 @@ export default {
         return json(200, { transcript, lang_iso2: langIso2 || "und", voice_timeout_sec: 120 }, extra);
       }
 
-      const messages = priorMessages.length
-        ? [...priorMessages, { role: "user", content: transcript }]
-        : [{ role: "user", content: transcript }];
+      const messages = priorMessages.length ? [...priorMessages, { role: "user", content: transcript }] : [{ role: "user", content: transcript }];
 
       if (!metaSafe.lang_iso2 || metaSafe.lang_iso2 === "auto" || metaSafe.lang_iso2 === "und") {
         metaSafe.lang_iso2 = langIso2 || "und";
@@ -907,16 +945,22 @@ export default {
 
       // Guard at edge
       let guardRes;
-      try { guardRes = await env.AI.run(MODEL_GUARD, { messages }); }
-      catch { return json(502, { error: "Safety check unavailable" }, extra); }
+      try {
+        guardRes = await env.AI.run(MODEL_GUARD, { messages });
+      } catch {
+        return json(502, { error: "Safety check unavailable" }, extra);
+      }
 
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, extra);
 
       // Call Upstream
       let upstreamResp;
-      try { upstreamResp = await callUpstream(env, { messages, meta: metaSafe }); }
-      catch (e) { return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, extra); }
+      try {
+        upstreamResp = await callUpstream(env, { messages, meta: metaSafe });
+      } catch (e) {
+        return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, extra);
+      }
 
       if (!upstreamResp.ok) {
         const t = await upstreamResp.text().catch(() => "");
