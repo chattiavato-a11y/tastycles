@@ -6,7 +6,7 @@
  * - Resolves endpoints (chat/voice/tts)
  * - Computes correct x-ops-asset-id for the CURRENT PAGE Origin
  * - Sends requests to the Worker with required headers
- * - Streams SSE safely (NO trimming, keeps payload intact)
+ * - Exposes a window.WorkerClient API for app.js integration
  */
 
 /* -------------------------
@@ -63,6 +63,15 @@ function normalizeConfig(cfg) {
   if (!out.ttsEndpoint) throw new Error("ttsEndpoint could not be resolved");
 
   return out;
+}
+
+async function init(force = false) {
+  await loadWorkerConfig(!!force);
+  return _cfgCache;
+}
+
+function getConfig() {
+  return _cfgCache || {};
 }
 
 /* -------------------------
@@ -182,47 +191,51 @@ async function streamSSEFromResponse(resp, onData) {
 
 /**
  * Chat (POST /api/chat)
- * @param {{messages:Array, meta?:Object, onDelta:(t:string)=>void, signal?:AbortSignal}} args
+ * @param {{messages:Array, meta?:Object}} payload
+ * @param {{signal?:AbortSignal, extraHeaders?:Object}} options
  */
-export async function postChat(args) {
-  const { messages, meta = {}, onDelta, signal } = args || {};
+async function postChat(payload, options = {}) {
+  const { messages, meta = {} } = payload || {};
+  const { signal, extraHeaders } = options || {};
   if (!Array.isArray(messages) || messages.length === 0) throw new Error("messages[] required");
-  if (typeof onDelta !== "function") throw new Error("onDelta callback required");
 
   const cfg = await loadWorkerConfig(false);
 
   const headers = buildHeaders(cfg, "text/event-stream", "application/json; charset=utf-8");
+  if (extraHeaders && typeof extraHeaders === "object") {
+    Object.entries(extraHeaders).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) headers.set(key, String(value));
+    });
+  }
   const body = JSON.stringify({ messages, meta });
 
-  const resp = await fetch(cfg.assistantEndpoint, {
+  return fetch(cfg.assistantEndpoint, {
     method: "POST",
     headers,
     body,
     signal,
   });
-
-  if (!resp.ok) {
-    const t = await resp.text().catch(() => "");
-    throw new Error(`chat failed: ${resp.status} ${t.slice(0, 1200)}`);
-  }
-
-  await streamSSEFromResponse(resp, onDelta);
-  return true;
 }
 
 /**
  * Voice STT (POST /api/voice?mode=stt)
  * Accepts Blob (recommended) or ArrayBuffer/Uint8Array
- * @param {{audio:Blob|ArrayBuffer|Uint8Array, signal?:AbortSignal}} args
+ * @param {Blob|ArrayBuffer|Uint8Array} audio
+ * @param {{signal?:AbortSignal, extraHeaders?:Object}} options
  */
-export async function postVoiceSTT(args) {
-  const { audio, signal } = args || {};
+async function postVoiceSTT(audio, options = {}) {
+  const { signal, extraHeaders } = options || {};
   if (!audio) throw new Error("audio required");
 
   const cfg = await loadWorkerConfig(false);
 
   // For binary: DO NOT set content-type manually; browser will set if Blob has type.
   const headers = buildHeaders(cfg, "application/json", null);
+  if (extraHeaders && typeof extraHeaders === "object") {
+    Object.entries(extraHeaders).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) headers.set(key, String(value));
+    });
+  }
 
   let body;
   if (audio instanceof Blob) body = audio;
@@ -231,21 +244,14 @@ export async function postVoiceSTT(args) {
   else throw new Error("audio must be Blob | ArrayBuffer | Uint8Array");
 
   const url = `${cfg.voiceEndpoint}?mode=stt`;
-  const resp = await fetch(url, { method: "POST", headers, body, signal });
-
-  if (!resp.ok) {
-    const t = await resp.text().catch(() => "");
-    throw new Error(`voice stt failed: ${resp.status} ${t.slice(0, 1200)}`);
-  }
-
-  return resp.json();
+  return fetch(url, { method: "POST", headers, body, signal });
 }
 
 /**
  * Voice Chat (POST /api/voice?mode=chat) — streams SSE deltas
  * @param {{audio:Blob|ArrayBuffer|Uint8Array, messages?:Array, meta?:Object, onDelta:(t:string)=>void, signal?:AbortSignal}} args
  */
-export async function postVoiceChat(args) {
+async function postVoiceChat(args) {
   const { audio, messages = [], meta = {}, onDelta, signal } = args || {};
   if (!audio) throw new Error("audio required");
   if (typeof onDelta !== "function") throw new Error("onDelta callback required");
@@ -284,31 +290,40 @@ export async function postVoiceChat(args) {
 
 /**
  * TTS (POST /api/tts) — returns { blob, contentType }
- * @param {{text:string, lang_iso2?:string, signal?:AbortSignal}} args
+ * @param {{text:string, lang_iso2?:string, language?:string}} payload
+ * @param {{signal?:AbortSignal, extraHeaders?:Object}} options
  */
-export async function postTTS(args) {
-  const { text, lang_iso2 = "en", signal } = args || {};
+async function postTTS(payload, options = {}) {
+  const { signal, extraHeaders } = options || {};
+  const { text, lang_iso2, language } = payload || {};
+  const resolvedLanguage = String(lang_iso2 || language || "en").trim();
   const t = String(text || "").trim();
   if (!t) throw new Error("text required");
 
   const cfg = await loadWorkerConfig(false);
 
   const headers = buildHeaders(cfg, "audio/*", "application/json; charset=utf-8");
-  const body = JSON.stringify({ text: t, lang_iso2 });
-
-  const resp = await fetch(cfg.ttsEndpoint, { method: "POST", headers, body, signal });
-
-  if (!resp.ok) {
-    const e = await resp.text().catch(() => "");
-    throw new Error(`tts failed: ${resp.status} ${e.slice(0, 1200)}`);
+  if (extraHeaders && typeof extraHeaders === "object") {
+    Object.entries(extraHeaders).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) headers.set(key, String(value));
+    });
   }
+  const body = JSON.stringify({ text: t, lang_iso2: resolvedLanguage });
 
-  const ct = resp.headers.get("content-type") || "audio/mpeg";
-  const blob = await resp.blob();
-  return { blob, contentType: ct };
+  return fetch(cfg.ttsEndpoint, { method: "POST", headers, body, signal });
 }
 
 /* Optional: expose config getter for debugging/UI */
-export async function getWorkerConfig(force = false) {
+async function getWorkerConfig(force = false) {
   return loadWorkerConfig(!!force);
 }
+
+window.WorkerClient = {
+  init,
+  getConfig,
+  getWorkerConfig,
+  postChat,
+  postVoiceSTT,
+  postVoiceChat,
+  postTTS,
+};
