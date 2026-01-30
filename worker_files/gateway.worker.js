@@ -1,5 +1,5 @@
 /**
- * drastic-measures — GATEWAY (aligned to repo gateway worker)
+ * gateway.worker.js — drastic-measures (GATEWAY)
  *
  * + ASSET-ID ENFORCED (Origin -> AssetID)
  * + Clean/scan/sanitize BEFORE Guard + Upstream
@@ -13,75 +13,21 @@
  * - Normalizes CRLF/Lone-CR -> LF in stream buffer
  * - Does NOT modify payload content
  *
- * Routing parity:
+ * Routing:
  * - Uses env.UPSTREAM_URL (no service binding)
  * - Calls `${UPSTREAM_URL}/api/chat`
  *
  * Notes on GitHub Pages path:
  * - The browser `Origin` header never includes a path (e.g. `/tastycles/`).
- * - So `https://chattiavato-a11y.github.io/tastycles/` is covered by the Origin:
+ * - So `https://chattiavato-a11y.github.io/tastycles/` is covered by Origin:
  *   `https://chattiavato-a11y.github.io`
  */
-
-const GATEWAY_CONFIG = {
-  version: 1,
-  environment: "production",
-  gateway_base_url: "https://drastic-measures.rulathemtodos.workers.dev",
-  assistant_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/chat",
-  voice_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice",
-  voice_stt_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice?mode=stt",
-  voice_chat_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/voice?mode=chat",
-  tts_endpoint: "https://drastic-measures.rulathemtodos.workers.dev/api/tts",
-  cors: {
-    allowed_origins: [
-      "https://gabo.io",
-      "https://www.gabo.io",
-      "https://chattiavato-a11y.github.io",
-      "https://drastic-measures.rulathemtodos.workers.dev",
-    ],
-  },
-  asset_identity: {
-    header_name: "x-ops-asset-id",
-    by_origin: {
-      "https://www.gabo.io":
-        "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
-      "https://gabo.io":
-        "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
-      "https://chattiavato-a11y.github.io":
-        "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
-      "https://drastic-measures.rulathemtodos.workers.dev":
-        "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-    },
-  },
-  request_defaults: {
-    accept: "text/event-stream",
-    content_type: "application/json; charset=utf-8",
-    voice_timeout_sec: 120,
-  },
-  ui_language_headers: {
-    lang_hint: "x-gabo-lang-hint",
-    lang_list: "x-gabo-lang-list",
-    voice_language: "x-gabo-voice-language",
-  },
-  expected_response_headers: {
-    asset_verified: "x-gabo-asset-verified",
-    lang_iso2: "x-gabo-lang-iso2",
-    model: "x-gabo-model",
-    translated: "x-gabo-translated",
-    embeddings: "x-gabo-embeddings",
-    stt_iso2: "x-gabo-stt-iso2",
-    tts_iso2: "x-gabo-tts-iso2",
-    voice_timeout_sec: "x-gabo-voice-timeout-sec",
-  },
-  dev: {
-    enabled: false,
-    allowed_origins: [],
-  },
-};
 
 // -------------------------
 // Allowed Origins + Asset IDs (Origin -> AssetID)
 // -------------------------
+// NOTE: This list is ONLY for browser Origins that call this Worker.
+// Do NOT add localhost. Do NOT add the Worker domain unless you truly serve UI from it.
 const ORIGIN_ASSET_ID = new Map([
   // gabo.io
   [
@@ -97,12 +43,6 @@ const ORIGIN_ASSET_ID = new Map([
   [
     "https://chattiavato-a11y.github.io",
     "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
-  ],
-
-  // OPTIONAL: keep ONLY if you actually serve a browser UI from this Worker domain
-  [
-    "https://drastic-measures.rulathemtodos.workers.dev",
-    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
   ],
 ]);
 
@@ -180,7 +120,7 @@ function corsHeaders(origin) {
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
       "cf-turnstile-response",
-      // repo parity: UI language hints
+      // UI language hints
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
       "x-gabo-voice-language",
@@ -219,8 +159,7 @@ function sse(stream, extra) {
   const h = new Headers(extra || {});
   h.set("content-type", "text/event-stream; charset=utf-8");
   h.set("cache-control", "no-cache, no-transform");
-  // repo parity: SSE proxy buffering hint
-  h.set("x-accel-buffering", "no");
+  h.set("x-accel-buffering", "no"); // SSE proxy buffering hint
   securityHeaders().forEach((v, k) => h.set(k, v));
   return new Response(stream, { status: 200, headers: h });
 }
@@ -245,19 +184,14 @@ function stripDangerousMarkup(text) {
   t = t.replace(/\u0000/g, "");
   t = t.replace(/\r\n?/g, "\n");
 
-  // Remove script/style blocks
   t = t.replace(/<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
-
-  // Remove high-risk tags
   t = t.replace(/<\s*(iframe|object|embed|link|meta|base|form)\b[^>]*>/gi, "");
   t = t.replace(/<\s*\/\s*(iframe|object|embed|link|meta|base|form)\s*>/gi, "");
 
-  // Remove dangerous schemes
   t = t.replace(/\bjavascript\s*:/gi, "");
   t = t.replace(/\bvbscript\s*:/gi, "");
   t = t.replace(/\bdata\s*:\s*text\/html\b/gi, "");
 
-  // Remove inline handlers (best-effort)
   t = t.replace(/\bon\w+\s*=\s*["'][\s\S]*?["']/gi, "");
   t = t.replace(/\bon\w+\s*=\s*[^\s>]+/gi, "");
 
@@ -319,7 +253,7 @@ function lastUserText(messages) {
 }
 
 // -------------------------
-// Language (multi-language) — repo-style: meta wins, then heuristic, then model
+// Language (multi-language) — meta wins, then heuristic, then model
 // -------------------------
 function normalizeIso2(code) {
   const s = safeTextOnly(code || "").toLowerCase();
@@ -340,7 +274,6 @@ function detectLangIso2Heuristic(text) {
   const t0 = String(text || "");
   if (!t0) return "";
 
-  // Script-based quick wins
   if (hasRange(t0, 0x3040, 0x30ff)) return "ja";
   if (hasRange(t0, 0xac00, 0xd7af)) return "ko";
   if (hasRange(t0, 0x4e00, 0x9fff)) return "zh";
@@ -353,35 +286,29 @@ function detectLangIso2Heuristic(text) {
 
   const t = t0.toLowerCase();
 
-  // Spanish
   if (/[ñáéíóúü¿¡]/i.test(t)) return "es";
   const esHits = ["hola","gracias","por favor","buenos","buenas","necesito","ayuda","quiero","donde","qué","cuánto","porque"]
     .filter((w) => t.includes(w)).length;
   if (esHits >= 2) return "es";
 
-  // Portuguese
   if (/[ãõç]/i.test(t)) return "pt";
   const ptHits = ["olá","ola","obrigado","obrigada","por favor","você","vocês","não","nao","tudo bem"]
     .filter((w) => t.includes(w)).length;
   if (ptHits >= 2) return "pt";
 
-  // French
   const frHits = ["bonjour","salut","merci","s'il","s’il","vous","au revoir","ça va","comment","aujourd"]
     .filter((w) => t.includes(w)).length;
   if (frHits >= 2 || /[àâçéèêëîïôûùüÿœ]/i.test(t)) return "fr";
 
-  // German
   if (/[äöüß]/i.test(t)) return "de";
   const deHits = ["hallo","danke","bitte","und","ich","nicht","wie geht","heute"]
     .filter((w) => t.includes(w)).length;
   if (deHits >= 2) return "de";
 
-  // Italian
   const itHits = ["ciao","grazie","per favore","come va","oggi","buongiorno","buonasera"]
     .filter((w) => t.includes(w)).length;
   if (itHits >= 2) return "it";
 
-  // Indonesian
   const idHits = ["halo","terima kasih","tolong","selamat","bagaimana","hari ini"]
     .filter((w) => t.includes(w)).length;
   if (idHits >= 2) return "id";
@@ -412,16 +339,13 @@ async function detectLangIso2ViaModel(env, text) {
 }
 
 async function detectLangIso2(env, messages, metaSafe) {
-  // 1) meta wins (if valid)
   const metaLang = normalizeIso2(metaSafe?.lang_iso2 || "");
   if (metaLang && metaLang !== "und" && metaLang !== "auto") return metaLang;
 
-  // 2) heuristic
   const lastUser = lastUserText(messages);
   const heur = detectLangIso2Heuristic(lastUser);
   if (heur) return heur;
 
-  // 3) model fallback
   const modelGuess = await detectLangIso2ViaModel(env, lastUser);
   if (modelGuess && modelGuess !== "und") return modelGuess;
 
@@ -477,7 +401,7 @@ function verifyAssetIdentity(origin, request) {
 }
 
 // -------------------------
-// Voice helpers (Whisper STT) — shared pattern
+// Voice helpers (Whisper STT)
 // -------------------------
 async function runWhisper(env, audioU8) {
   try {
@@ -528,7 +452,6 @@ function forwardUpstreamHeaders(outHeaders, upstreamResp) {
 // Upstream stream -> SSE text deltas (NO payload mutation)
 // -------------------------
 function sseDataFrame(text) {
-  // IMPORTANT: "data:" (NO trailing space). Payload must be unmodified.
   const s = String(text ?? "");
   const lines = s.split("\n");
   let out = "";
@@ -538,7 +461,6 @@ function sseDataFrame(text) {
 }
 
 function extractJsonObjectsFromBuffer(buffer) {
-  // Balanced-brace extractor (handles strings + escapes) for raw concatenated JSON objects.
   const out = [];
   let start = -1;
   let depth = 0;
@@ -559,13 +481,9 @@ function extractJsonObjectsFromBuffer(buffer) {
     }
 
     if (inStr) {
-      if (esc) {
-        esc = false;
-      } else if (ch === "\\") {
-        esc = true;
-      } else if (ch === '"') {
-        inStr = false;
-      }
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
       continue;
     }
 
@@ -630,7 +548,6 @@ function bridgeUpstreamToSSE(upstreamBody) {
       let buf = "";
 
       try {
-        // hello comment (keeps some proxies happy)
         controller.enqueue(encoder.encode(": ok\n\n"));
 
         while (true) {
@@ -639,7 +556,7 @@ function bridgeUpstreamToSSE(upstreamBody) {
 
           buf += decoder.decode(value, { stream: true });
 
-          // Normalize CRLF + lone CR -> LF (repo parity)
+          // Normalize CRLF + lone CR -> LF
           buf = buf.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
           // 1) If Upstream is SSE, parse SSE blocks first
@@ -650,16 +567,14 @@ function bridgeUpstreamToSSE(upstreamBody) {
 
             for (const block of blocks) {
               const { data } = parseSSEBlockToData(block);
-
-              // End sentinel support
               const dataTrim = String(data || "").trim();
+
               if (dataTrim === "[DONE]") {
                 controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
                 controller.close();
                 return;
               }
 
-              // data may be JSON or plain text
               const d0 = dataTrim[0];
               if (d0 === "{" || d0 === "[") {
                 try {
@@ -690,7 +605,6 @@ function bridgeUpstreamToSSE(upstreamBody) {
           }
         }
 
-        // flush any remaining decode tail
         const tail = decoder.decode();
         if (tail) buf += tail;
 
