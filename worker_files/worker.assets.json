@@ -24,6 +24,7 @@
         "allowed_origins": [
           "https://www.gabo.io",
           "https://gabo.io",
+          "https://drastic-measures.rulathemtodos.workers.dev",
           "https://chattiavato-a11y.github.io"
         ],
         "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
