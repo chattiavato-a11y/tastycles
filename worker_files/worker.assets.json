@@ -24,7 +24,6 @@
         "allowed_origins": [
           "https://www.gabo.io",
           "https://gabo.io",
-          "https://drastic-measures.rulathemtodos.workers.dev",
           "https://chattiavato-a11y.github.io"
         ],
         "required_headers": ["Content-Type", "Accept", "X-Ops-Asset-Id"]
@@ -35,7 +34,7 @@
         "change_log": [
           {
             "by": "automation",
-            "action": "register worker endpoint asset id",
+            "action": "register worker endpoint asset id (serverless-only origins)",
             "when": "2026-02-01T00:00:00Z"
           }
         ]
