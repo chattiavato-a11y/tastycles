@@ -13,19 +13,21 @@
  * - Normalizes CRLF/Lone-CR -> LF in stream buffer
  * - Does NOT modify payload content
  *
- * Routing parity:
+ * Routing:
  * - Uses env.UPSTREAM_URL (no service binding)
  * - Calls `${UPSTREAM_URL}/api/chat`
  *
  * Notes on GitHub Pages path:
  * - The browser `Origin` header never includes a path (e.g. `/tastycles/`).
- * - So `https://chattiavato-a11y.github.io/tastycles/` is covered by the Origin:
+ * - So `https://chattiavato-a11y.github.io/tastycles/` is covered by Origin:
  *   `https://chattiavato-a11y.github.io`
  */
 
 // -------------------------
 // Allowed Origins + Asset IDs (Origin -> AssetID)
 // -------------------------
+// NOTE: This list is ONLY for browser Origins that call this Worker.
+// Do NOT add localhost. Do NOT add the Worker domain unless you truly serve UI from it.
 const ORIGIN_ASSET_ID = new Map([
   // gabo.io
   [
@@ -41,12 +43,6 @@ const ORIGIN_ASSET_ID = new Map([
   [
     "https://chattiavato-a11y.github.io",
     "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
-  ],
-
-  // OPTIONAL: keep ONLY if you actually serve a browser UI from this Worker domain
-  [
-    "https://drastic-measures.rulathemtodos.workers.dev",
-    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
   ],
 ]);
 
@@ -124,7 +120,7 @@ function corsHeaders(origin) {
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
       "cf-turnstile-response",
-      // repo parity: UI language hints
+      // UI language hints
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
       "x-gabo-voice-language",
@@ -163,8 +159,7 @@ function sse(stream, extra) {
   const h = new Headers(extra || {});
   h.set("content-type", "text/event-stream; charset=utf-8");
   h.set("cache-control", "no-cache, no-transform");
-  // repo parity: SSE proxy buffering hint
-  h.set("x-accel-buffering", "no");
+  h.set("x-accel-buffering", "no"); // SSE proxy buffering hint
   securityHeaders().forEach((v, k) => h.set(k, v));
   return new Response(stream, { status: 200, headers: h });
 }
@@ -189,19 +184,14 @@ function stripDangerousMarkup(text) {
   t = t.replace(/\u0000/g, "");
   t = t.replace(/\r\n?/g, "\n");
 
-  // Remove script/style blocks
   t = t.replace(/<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
-
-  // Remove high-risk tags
   t = t.replace(/<\s*(iframe|object|embed|link|meta|base|form)\b[^>]*>/gi, "");
   t = t.replace(/<\s*\/\s*(iframe|object|embed|link|meta|base|form)\s*>/gi, "");
 
-  // Remove dangerous schemes
   t = t.replace(/\bjavascript\s*:/gi, "");
   t = t.replace(/\bvbscript\s*:/gi, "");
   t = t.replace(/\bdata\s*:\s*text\/html\b/gi, "");
 
-  // Remove inline handlers (best-effort)
   t = t.replace(/\bon\w+\s*=\s*["'][\s\S]*?["']/gi, "");
   t = t.replace(/\bon\w+\s*=\s*[^\s>]+/gi, "");
 
@@ -284,7 +274,6 @@ function detectLangIso2Heuristic(text) {
   const t0 = String(text || "");
   if (!t0) return "";
 
-  // Script-based quick wins
   if (hasRange(t0, 0x3040, 0x30ff)) return "ja";
   if (hasRange(t0, 0xac00, 0xd7af)) return "ko";
   if (hasRange(t0, 0x4e00, 0x9fff)) return "zh";
@@ -297,14 +286,12 @@ function detectLangIso2Heuristic(text) {
 
   const t = t0.toLowerCase();
 
-  // Spanish
   if (/[ñáéíóúü¿¡]/i.test(t)) return "es";
   const esHits = ["hola", "gracias", "por favor", "buenos", "buenas", "necesito", "ayuda", "quiero", "donde", "qué", "cuánto", "porque"].filter(
     (w) => t.includes(w)
   ).length;
   if (esHits >= 2) return "es";
 
-  // Portuguese
   if (/[ãõç]/i.test(t)) return "pt";
   const ptHits = ["olá", "ola", "obrigado", "obrigada", "por favor", "você", "vocês", "não", "nao", "tudo bem"].filter((w) =>
     t.includes(w)
@@ -317,7 +304,6 @@ function detectLangIso2Heuristic(text) {
   ).length;
   if (frHits >= 2 || /[àâçéèêëîïôûùüÿœ]/i.test(t)) return "fr";
 
-  // German
   if (/[äöüß]/i.test(t)) return "de";
   const deHits = ["hallo", "danke", "bitte", "und", "ich", "nicht", "wie geht", "heute"].filter((w) => t.includes(w)).length;
   if (deHits >= 2) return "de";
@@ -361,16 +347,13 @@ async function detectLangIso2ViaModel(env, text) {
 }
 
 async function detectLangIso2(env, messages, metaSafe) {
-  // 1) meta wins (if valid)
   const metaLang = normalizeIso2(metaSafe?.lang_iso2 || "");
   if (metaLang && metaLang !== "und" && metaLang !== "auto") return metaLang;
 
-  // 2) heuristic
   const lastUser = lastUserText(messages);
   const heur = detectLangIso2Heuristic(lastUser);
   if (heur) return heur;
 
-  // 3) model fallback
   const modelGuess = await detectLangIso2ViaModel(env, lastUser);
   if (modelGuess && modelGuess !== "und") return modelGuess;
 
@@ -426,7 +409,7 @@ function verifyAssetIdentity(origin, request) {
 }
 
 // -------------------------
-// Voice helpers (Whisper STT) — shared pattern
+// Voice helpers (Whisper STT)
 // -------------------------
 async function runWhisper(env, audioU8) {
   try {
@@ -477,7 +460,6 @@ function forwardUpstreamHeaders(outHeaders, upstreamResp) {
 // Upstream stream -> SSE text deltas (NO payload mutation)
 // -------------------------
 function sseDataFrame(text) {
-  // IMPORTANT: "data:" (NO trailing space). Payload must be unmodified.
   const s = String(text ?? "");
   const lines = s.split("\n");
   let out = "";
@@ -487,7 +469,6 @@ function sseDataFrame(text) {
 }
 
 function extractJsonObjectsFromBuffer(buffer) {
-  // Balanced-brace extractor (handles strings + escapes) for raw concatenated JSON objects.
   const out = [];
   let start = -1;
   let depth = 0;
@@ -508,13 +489,9 @@ function extractJsonObjectsFromBuffer(buffer) {
     }
 
     if (inStr) {
-      if (esc) {
-        esc = false;
-      } else if (ch === "\\") {
-        esc = true;
-      } else if (ch === '"') {
-        inStr = false;
-      }
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
       continue;
     }
 
@@ -582,7 +559,6 @@ function bridgeUpstreamToSSE(upstreamBody) {
       let buf = "";
 
       try {
-        // hello comment (keeps some proxies happy)
         controller.enqueue(encoder.encode(": ok\n\n"));
 
         while (true) {
@@ -591,7 +567,7 @@ function bridgeUpstreamToSSE(upstreamBody) {
 
           buf += decoder.decode(value, { stream: true });
 
-          // Normalize CRLF + lone CR -> LF (repo parity)
+          // Normalize CRLF + lone CR -> LF
           buf = buf.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
           // 1) If Upstream is SSE, parse SSE blocks first
@@ -602,16 +578,14 @@ function bridgeUpstreamToSSE(upstreamBody) {
 
             for (const block of blocks) {
               const { data } = parseSSEBlockToData(block);
-
-              // End sentinel support
               const dataTrim = String(data || "").trim();
+
               if (dataTrim === "[DONE]") {
                 controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
                 controller.close();
                 return;
               }
 
-              // data may be JSON or plain text
               const d0 = dataTrim[0];
               if (d0 === "{" || d0 === "[") {
                 try {
@@ -646,7 +620,6 @@ function bridgeUpstreamToSSE(upstreamBody) {
           }
         }
 
-        // flush any remaining decode tail
         const tail = decoder.decode();
         if (tail) buf += tail;
 
