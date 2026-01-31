@@ -45,13 +45,18 @@ function normalizeConfig(cfg) {
   const voiceEndpoint = String(c.voiceEndpoint || "").trim();
   const ttsEndpoint = String(c.ttsEndpoint || "").trim();
 
+  const gatewayEndpoint = String(c.gatewayEndpoint || "").trim().replace(/\/$/, "");
+  const resolvedChatEndpoint = assistantEndpoint
+    || (gatewayEndpoint ? `${gatewayEndpoint}/api/chat` : "")
+    || (workerEndpoint ? `${workerEndpoint}/api/chat` : "");
+
   const out = {
     ...c,
     workerEndpoint,
-    assistantEndpoint: assistantEndpoint || (workerEndpoint ? `${workerEndpoint}/api/chat` : ""),
+    assistantEndpoint: resolvedChatEndpoint,
     voiceEndpoint: voiceEndpoint || (workerEndpoint ? `${workerEndpoint}/api/voice` : ""),
     ttsEndpoint: ttsEndpoint || (workerEndpoint ? `${workerEndpoint}/api/tts` : ""),
-    gatewayEndpoint: String(c.gatewayEndpoint || workerEndpoint || "").trim().replace(/\/$/, ""),
+    gatewayEndpoint,
     requiredHeaders: Array.isArray(c.requiredHeaders) ? c.requiredHeaders : ["Content-Type", "Accept", "X-Ops-Asset-Id"],
     allowedOrigins: Array.isArray(c.allowedOrigins) ? c.allowedOrigins : [],
     allowedOriginAssetIds: Array.isArray(c.allowedOriginAssetIds) ? c.allowedOriginAssetIds : [],
