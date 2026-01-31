@@ -89,11 +89,5 @@
     "max_age_sec": 86400
   },
 
-  "notes": [
-    "Removed ALL localhost origins (no http://localhost:3000, no http://localhost:5173, no http://127.0.0.1:5500).",
-    "assistant_endpoint points to the Gateway Worker (/api/chat) at drastic-measures.rulathemtodos.workers.dev.",
-    "GitHub Pages path /tastycles/ is covered because Origin has no path; only the host is validated.",
-    "Do NOT add the Worker domain as an allowed origin unless you serve a browser UI from the Worker domain.",
-    "allowedOriginAssetIds must stay positionally aligned with allowedOrigins for client header enforcement."
-  ]
+  "notes": []
 }
