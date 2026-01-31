@@ -3,5 +3,5 @@ main = "gateway.worker.js"
 compatibility_date = "2024-10-10"
 
 [vars]
-ALLOWED_ORIGINS = "https://www.gabos.io,https://gabos.io,https://dash.cloudflare.com"
+ALLOWED_ORIGINS = "https://www.gabos.io,https://dash.cloudflare.com"
 REQUIRED_HEADERS = "Content-Type,Accept,X-Ops-Asset-Id"
