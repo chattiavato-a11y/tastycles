@@ -1,74 +1,151 @@
 /**
- * drastic-measures.gateway.js — drastic-measures — GATEWAY (repo parity)
+ * src/index.js — drastic-measures — GATEWAY (Brain via Service Binding)
+ *
+ * Author: Gabriel Anangono
  *
  * + ASSET-ID ENFORCED (Origin -> AssetID)
- * + Clean/scan/sanitize BEFORE Guard + Upstream
+ * + Clean/scan/sanitize BEFORE Guard + Brain
  * + Guard at Edge
- * + Forward Upstream headers (x-gabo-*)
- * + Convert Upstream streaming (raw JSON OR SSE) -> SSE text deltas (UI-friendly)
+ * + Calls Brain ONLY via service binding (env.BRAIN)
+ * + Forwards Brain headers (x-gabo-*)
+ * + Converts Brain streaming (raw JSON OR SSE) -> SSE text deltas (UI-friendly)
  *
- * SSE parity:
- * - Uses "data:" (NO space) framing
- * - NO zero-width injection
- * - Normalizes CRLF/Lone-CR -> LF in stream buffer
- * - Does NOT modify payload content
+ * Voice:
+ * - /api/voice?mode=stt  -> JSON transcript
+ * - /api/voice?mode=chat -> STT then Guard -> Brain -> SSE
  *
- * Routing:
- * - Uses env.UPSTREAM_URL (no service binding)
- * - Calls `${UPSTREAM_URL}/api/chat`
- *
- * Notes on GitHub Pages path:
- * - The browser `Origin` header never includes a path (e.g. `/tastycles/`).
- * - So `https://chattiavato-a11y.github.io/tastycles/` is covered by Origin:
- *   `https://chattiavato-a11y.github.io`
+ * IMPORTANT (STT):
+ * - whisper-large-v3-turbo requires: { audio: "<base64 string>" }
+ * - fallback whisper supports array/binary (used only when turbo fails and audio is small)
  */
 
 // -------------------------
 // Allowed Origins + Asset IDs (Origin -> AssetID)
 // -------------------------
-// NOTE: This list is ONLY for browser Origins that call this Worker.
-// Do NOT add localhost. Do NOT add the Worker domain unless you truly serve UI from it.
 const ORIGIN_ASSET_ID = new Map([
-  // gabos.io
+  // gabo.io
   [
-    "https://www.gabos.io",
+    "https://www.gabo.io",
     "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
   ],
   [
-    "https://gabos.io",
+    "https://gabo.io",
     "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
   ],
 
-  // GitHub Pages host (covers /tastycles/ because Origin has no path)
+  // GitHub Pages host
   [
     "https://chattiavato-a11y.github.io",
     "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
+  ],
+
+  // Worker domain (optional UI host)
+  [
+    "https://drastic-measures.rulathemtodos.workers.dev",
+    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
   ],
 ]);
 
 const ALLOWED_ORIGINS = new Set(Array.from(ORIGIN_ASSET_ID.keys()));
 
 // -------------------------
-// Hop header parity (repo)
+// Hop header parity (MUST match Brain)
 // -------------------------
 const HOP_HDR = "x-gabo-hop";
 const HOP_VAL = "gateway";
-const ORIGIN_FWD_HDR = "x-gabo-origin";
 
 // -------------------------
-// Models (Gateway)
+// Identity + disclosure policy
+// -------------------------
+const AUTHOR_NAME = "Gabriel Anangono";
+
+// If asked about exact model identifiers/config, we do NOT disclose.
+function wantsModelDisclosure(text) {
+  const t = String(text || "").toLowerCase();
+  const needles = [
+    "what model",
+    "which model",
+    "model are you",
+    "model do you use",
+    "what llm",
+    "which llm",
+    "what ai model",
+    "which ai model",
+    "what models are used",
+    "tell me the model",
+    "@cf/",
+    "llama-",
+    "gpt-",
+    "gemini",
+    "claude",
+    "mistral",
+    "whisper-",
+    "deepgram",
+    "bge-",
+  ];
+  return needles.some((n) => t.includes(n));
+}
+
+function wantsAuthorDisclosure(text) {
+  const t = String(text || "").toLowerCase();
+  const needles = [
+    "who created you",
+    "who made you",
+    "who built you",
+    "who is your author",
+    "who is the author",
+    "who is your creator",
+    "creator",
+    "author",
+    "desarrollador",
+    "creador",
+    "quién te creó",
+    "quien te creo",
+    "quién te hizo",
+    "hecho por",
+    "creado por",
+  ];
+  return needles.some((n) => t.includes(n));
+}
+
+// Redact internal model IDs if they ever appear (defense in depth).
+function redactInternalModelIds(text) {
+  let t = String(text || "");
+  t = t.replace(/@cf\/[a-z0-9._-]+\/[a-z0-9._-]+/gi, "[model withheld]");
+  t = t.replace(/\/ai\/run\/@cf\/[a-z0-9._-]+\/[a-z0-9._-]+/gi, "/ai/run/[model withheld]");
+  return t;
+}
+
+function stripAuthorUnlessAllowed(text, allowAuthor) {
+  let t = String(text || "");
+  if (allowAuthor) return t;
+  const re = new RegExp(AUTHOR_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  t = t.replace(re, "").replace(/\s{2,}/g, " ").trim();
+  return t;
+}
+
+function postProcessOutgoingText(text, allowAuthor) {
+  let t = String(text || "");
+  t = redactInternalModelIds(t);
+  t = stripAuthorUnlessAllowed(t, allowAuthor);
+  return t;
+}
+
+// -------------------------
+// Models (INTERNAL; never disclose identifiers in chat responses)
 // -------------------------
 const MODEL_GUARD = "@cf/meta/llama-guard-3-8b";
+
 const MODEL_STT_TURBO = "@cf/openai/whisper-large-v3-turbo";
 const MODEL_STT_FALLBACK = "@cf/openai/whisper";
+
 const TTS_EN = "@cf/deepgram/aura-2-en";
 const TTS_ES = "@cf/deepgram/aura-2-es";
 const TTS_FALLBACK = "@cf/myshell-ai/melotts";
 
-// Language classifier fallback (only used when heuristics fail)
 const MODEL_CHAT_FAST = "@cf/meta/llama-3.2-3b-instruct";
 
-// Optional hooks (only used if requested via meta flags you allow)
+// Optional hooks (kept for parity)
 const MODEL_TRANSLATE = "@cf/meta/m2m100-1.2b";
 const MODEL_EMBED = "@cf/baai/bge-m3";
 
@@ -78,11 +155,12 @@ const MODEL_EMBED = "@cf/baai/bge-m3";
 const MAX_BODY_CHARS = 8_000;
 const MAX_MESSAGES = 30;
 const MAX_MESSAGE_CHARS = 1_000;
+
 const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
-const MAX_VOICE_JSON_AUDIO_B64_CHARS = 2_500_000;
+const MAX_VOICE_JSON_AUDIO_B64_CHARS = 2_500_000; // safety cap for JSON audio_b64
 
 // -------------------------
-// Security headers (repo parity)
+// Security headers
 // -------------------------
 function securityHeaders() {
   const h = new Headers();
@@ -102,20 +180,6 @@ function securityHeaders() {
 // -------------------------
 // CORS
 // -------------------------
-function getCallerOrigin(request) {
-  const origin = request.headers.get("Origin");
-  if (origin && origin !== "null") return origin;
-  const forwarded = request.headers.get(ORIGIN_FWD_HDR);
-  if (forwarded) return forwarded;
-  const referer = request.headers.get("Referer");
-  if (referer) {
-    try {
-      return new URL(referer).origin;
-    } catch {}
-  }
-  return "";
-}
-
 function isAllowedOrigin(origin) {
   return !!origin && origin !== "null" && ALLOWED_ORIGINS.has(origin);
 }
@@ -137,8 +201,6 @@ function corsHeaders(origin) {
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
       "cf-turnstile-response",
-      "x-gabo-origin",
-      // UI language hints
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
       "x-gabo-voice-language",
@@ -177,9 +239,30 @@ function sse(stream, extra) {
   const h = new Headers(extra || {});
   h.set("content-type", "text/event-stream; charset=utf-8");
   h.set("cache-control", "no-cache, no-transform");
-  h.set("x-accel-buffering", "no"); // SSE proxy buffering hint
+  h.set("x-accel-buffering", "no");
   securityHeaders().forEach((v, k) => h.set(k, v));
   return new Response(stream, { status: 200, headers: h });
+}
+
+function sseDataFrame(text) {
+  const s = String(text ?? "");
+  const lines = s.split("\n");
+  let out = "";
+  for (const line of lines) out += "data:" + line + "\n";
+  out += "\n";
+  return out;
+}
+
+function oneShotSSE(messageText) {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(": ok\n\n"));
+      controller.enqueue(encoder.encode(sseDataFrame(messageText)));
+      controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
+      controller.close();
+    },
+  });
 }
 
 // -------------------------
@@ -271,7 +354,7 @@ function lastUserText(messages) {
 }
 
 // -------------------------
-// Language (multi-language) — meta wins, then heuristic, then model
+// Language detect (heuristic + model fallback)
 // -------------------------
 function normalizeIso2(code) {
   const s = safeTextOnly(code || "").toLowerCase();
@@ -305,33 +388,31 @@ function detectLangIso2Heuristic(text) {
   const t = t0.toLowerCase();
 
   if (/[ñáéíóúü¿¡]/i.test(t)) return "es";
-  const esHits = ["hola", "gracias", "por favor", "buenos", "buenas", "necesito", "ayuda", "quiero", "donde", "qué", "cuánto", "porque"].filter(
-    (w) => t.includes(w)
-  ).length;
+  const esHits = [
+    "hola","gracias","por favor","buenos","buenas","necesito","ayuda","quiero","donde","qué","cuánto","porque",
+  ].filter((w) => t.includes(w)).length;
   if (esHits >= 2) return "es";
 
   if (/[ãõç]/i.test(t)) return "pt";
-  const ptHits = ["olá", "ola", "obrigado", "obrigada", "por favor", "você", "vocês", "não", "nao", "tudo bem"].filter((w) =>
-    t.includes(w)
-  ).length;
+  const ptHits = ["olá","ola","obrigado","obrigada","por favor","você","vocês","não","nao","tudo bem"]
+    .filter((w) => t.includes(w)).length;
   if (ptHits >= 2) return "pt";
 
-  // French
-  const frHits = ["bonjour", "salut", "merci", "s'il", "s’il", "vous", "au revoir", "ça va", "comment", "aujourd"].filter((w) =>
-    t.includes(w)
-  ).length;
+  const frHits = ["bonjour","salut","merci","s'il","s’il","vous","au revoir","ça va","comment","aujourd"]
+    .filter((w) => t.includes(w)).length;
   if (frHits >= 2 || /[àâçéèêëîïôûùüÿœ]/i.test(t)) return "fr";
 
   if (/[äöüß]/i.test(t)) return "de";
-  const deHits = ["hallo", "danke", "bitte", "und", "ich", "nicht", "wie geht", "heute"].filter((w) => t.includes(w)).length;
+  const deHits = ["hallo","danke","bitte","und","ich","nicht","wie geht","heute"]
+    .filter((w) => t.includes(w)).length;
   if (deHits >= 2) return "de";
 
-  // Italian
-  const itHits = ["ciao", "grazie", "per favore", "come va", "oggi", "buongiorno", "buonasera"].filter((w) => t.includes(w)).length;
+  const itHits = ["ciao","grazie","per favore","come va","oggi","buongiorno","buonasera"]
+    .filter((w) => t.includes(w)).length;
   if (itHits >= 2) return "it";
 
-  // Indonesian
-  const idHits = ["halo", "terima kasih", "tolong", "selamat", "bagaimana", "hari ini"].filter((w) => t.includes(w)).length;
+  const idHits = ["halo","terima kasih","tolong","selamat","bagaimana","hari ini"]
+    .filter((w) => t.includes(w)).length;
   if (idHits >= 2) return "id";
 
   return "";
@@ -346,17 +427,12 @@ async function detectLangIso2ViaModel(env, text) {
       stream: false,
       max_tokens: 6,
       messages: [
-        {
-          role: "system",
-          content: "Return ONLY the ISO 639-1 language code (two letters). If unsure, return 'und'. No extra text.",
-        },
+        { role: "system", content: "Return ONLY the ISO 639-1 language code (two letters). If unsure, return 'und'. No extra text." },
         { role: "user", content: `Text:\n${sample}` },
       ],
     });
 
-    const raw = String(out?.response || out?.result?.response || out?.text || out || "")
-      .trim()
-      .toLowerCase();
+    const raw = String(out?.response || out?.result?.response || out?.text || out || "").trim().toLowerCase();
     const m = raw.match(/\b([a-z]{2}|und)\b/);
     return m ? m[1] : "und";
   } catch {
@@ -379,7 +455,7 @@ async function detectLangIso2(env, messages, metaSafe) {
 }
 
 // -------------------------
-// Guard parsing + meta sanitize (minimal safe surface)
+// Guard parsing + meta sanitize
 // -------------------------
 function parseGuardResult(res) {
   const r = res?.response ?? res?.result?.response ?? res?.result ?? res;
@@ -427,22 +503,8 @@ function verifyAssetIdentity(origin, request) {
 }
 
 // -------------------------
-// Voice helpers (Whisper STT)
+// Base64 helpers
 // -------------------------
-async function runSTT(env, audioU8, audioB64Maybe) {
-  const audioB64 = (typeof audioB64Maybe === "string" && audioB64Maybe.length >= 16)
-    ? audioB64Maybe
-    : bytesToBase64(audioU8);
-  try {
-    return await env.AI.run(MODEL_STT_TURBO, { audio: audioB64 });
-  } catch (error) {
-    if (audioU8 && audioU8.byteLength <= 1_500_000) {
-      return await env.AI.run(MODEL_STT_FALLBACK, { audio: Array.from(audioU8) });
-    }
-    throw error;
-  }
-}
-
 function bytesToBase64(u8) {
   const chunk = 0x8000;
   let binary = "";
@@ -461,47 +523,76 @@ function base64ToBytes(b64) {
 }
 
 // -------------------------
-// Upstream call (env var routing)
+// Voice STT (FIXED)
 // -------------------------
-function upstreamBase(env) {
-  const u = String(env?.UPSTREAM_URL || "").trim();
-  if (!u) throw new Error("UPSTREAM_URL is not configured.");
-  return u.replace(/\/$/, "");
+async function runSTT(env, audioU8, audioB64Maybe) {
+  const audio_b64 =
+    (typeof audioB64Maybe === "string" && audioB64Maybe.length >= 16)
+      ? audioB64Maybe
+      : bytesToBase64(audioU8);
+
+  // Primary: turbo wants base64 string
+  try {
+    return await env.AI.run(MODEL_STT_TURBO, { audio: audio_b64 });
+  } catch (eTurbo) {
+    // Fallback: whisper supports array/binary; only for small payloads
+    try {
+      if (audioU8.byteLength <= 1_500_000) {
+        return await env.AI.run(MODEL_STT_FALLBACK, { audio: Array.from(audioU8) });
+      }
+    } catch (eFallback) {
+      const msg = String(eFallback?.message || eFallback || eTurbo?.message || eTurbo);
+      throw new Error(msg);
+    }
+
+    const msg = String(eTurbo?.message || eTurbo);
+    throw new Error(msg);
+  }
 }
 
-async function callUpstream(env, payload) {
-  const base = upstreamBase(env);
-  return fetch(`${base}/api/chat`, {
+// -------------------------
+// Brain call (SERVICE BINDING) — FIXED (forward Origin + asset id)
+// -------------------------
+function requireBrain(env) {
+  if (!env?.BRAIN || typeof env.BRAIN.fetch !== "function") {
+    throw new Error("Missing service binding (env.BRAIN). If your binding is named 'brain', change code to env.brain.");
+  }
+  return env.BRAIN;
+}
+
+async function callBrainChat(env, payload, origin, assetId) {
+  const brain = requireBrain(env);
+
+  // Brain enforces Origin allowlist + asset-id. Service binding calls don't include Origin by default.
+  const safeOrigin = String(origin || "").trim() || "https://drastic-measures.rulathemtodos.workers.dev";
+  const safeAssetId = String(assetId || "").trim();
+
+  return brain.fetch("https://brain/api/chat", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       accept: "text/event-stream",
       [HOP_HDR]: HOP_VAL,
+
+      // Forward identity so Brain doesn't see "(none)"
+      Origin: safeOrigin,
+      "x-ops-asset-id": safeAssetId,
     },
     body: JSON.stringify(payload),
   });
 }
 
-function forwardUpstreamHeaders(outHeaders, upstreamResp) {
+function forwardBrainHeaders(outHeaders, brainResp) {
   const pass = ["x-gabo-lang-iso2", "x-gabo-model", "x-gabo-translated", "x-gabo-embeddings"];
   for (const k of pass) {
-    const v = upstreamResp.headers.get(k);
+    const v = brainResp.headers.get(k);
     if (v) outHeaders.set(k, v);
   }
 }
 
 // -------------------------
-// Upstream stream -> SSE text deltas (NO payload mutation)
+// Brain stream -> SSE text deltas
 // -------------------------
-function sseDataFrame(text) {
-  const s = String(text ?? "");
-  const lines = s.split("\n");
-  let out = "";
-  for (const line of lines) out += "data:" + line + "\n";
-  out += "\n";
-  return out;
-}
-
 function extractJsonObjectsFromBuffer(buffer) {
   const out = [];
   let start = -1;
@@ -529,10 +620,7 @@ function extractJsonObjectsFromBuffer(buffer) {
       continue;
     }
 
-    if (ch === '"') {
-      inStr = true;
-      continue;
-    }
+    if (ch === '"') { inStr = true; continue; }
     if (ch === "{") depth++;
     if (ch === "}") depth--;
 
@@ -542,7 +630,7 @@ function extractJsonObjectsFromBuffer(buffer) {
     }
   }
 
-  const rest = start === -1 ? "" : buffer.slice(start);
+  const rest = (start === -1) ? "" : buffer.slice(start);
   return { chunks: out, rest };
 }
 
@@ -561,7 +649,7 @@ function parseSSEBlockToData(block) {
   const dataLines = [];
   for (const line of lines) {
     if (!line) continue;
-    if (line.startsWith("data:")) dataLines.push(line.slice(5)); // DO NOT trim payload
+    if (line.startsWith("data:")) dataLines.push(line.slice(5));
   }
   return { data: dataLines.join("\n") };
 }
@@ -574,11 +662,11 @@ function getDeltaFromObj(obj) {
   return "";
 }
 
-function bridgeUpstreamToSSE(upstreamBody) {
+function bridgeBrainToSSE(brainBody, allowAuthor) {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
 
-  if (!upstreamBody) {
+  if (!brainBody) {
     return new ReadableStream({
       start(controller) {
         controller.enqueue(encoder.encode(sseDataFrame("")));
@@ -589,7 +677,7 @@ function bridgeUpstreamToSSE(upstreamBody) {
 
   return new ReadableStream({
     async start(controller) {
-      const reader = upstreamBody.getReader();
+      const reader = brainBody.getReader();
       let buf = "";
 
       try {
@@ -600,11 +688,8 @@ function bridgeUpstreamToSSE(upstreamBody) {
           if (done) break;
 
           buf += decoder.decode(value, { stream: true });
-
-          // Normalize CRLF + lone CR -> LF
           buf = buf.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-          // 1) If Upstream is SSE, parse SSE blocks first
           const looksLikeSSE = /(^|\n)data:/.test(buf) && buf.includes("\n\n");
           if (looksLikeSSE) {
             const { blocks, rest } = extractSSEBlocks(buf);
@@ -625,18 +710,20 @@ function bridgeUpstreamToSSE(upstreamBody) {
                 try {
                   const obj = JSON.parse(dataTrim);
                   const delta = getDeltaFromObj(obj);
-                  if (delta) controller.enqueue(encoder.encode(sseDataFrame(delta)));
+                  const out = postProcessOutgoingText(delta, allowAuthor);
+                  if (out) controller.enqueue(encoder.encode(sseDataFrame(out)));
                 } catch {
-                  if (data) controller.enqueue(encoder.encode(sseDataFrame(String(data))));
+                  const out = postProcessOutgoingText(String(data || ""), allowAuthor);
+                  if (out) controller.enqueue(encoder.encode(sseDataFrame(out)));
                 }
               } else {
-                if (data) controller.enqueue(encoder.encode(sseDataFrame(String(data))));
+                const out = postProcessOutgoingText(String(data || ""), allowAuthor);
+                if (out) controller.enqueue(encoder.encode(sseDataFrame(out)));
               }
             }
             continue;
           }
 
-          // 2) Otherwise parse raw concatenated JSON objects
           if (buf.length > 1_000_000 && !buf.includes("{")) buf = buf.slice(-100_000);
 
           const { chunks, rest } = extractJsonObjectsFromBuffer(buf);
@@ -644,13 +731,10 @@ function bridgeUpstreamToSSE(upstreamBody) {
 
           for (const s of chunks) {
             let obj;
-            try {
-              obj = JSON.parse(s);
-            } catch {
-              continue;
-            }
+            try { obj = JSON.parse(s); } catch { continue; }
             const delta = getDeltaFromObj(obj);
-            if (delta) controller.enqueue(encoder.encode(sseDataFrame(delta)));
+            const out = postProcessOutgoingText(delta, allowAuthor);
+            if (out) controller.enqueue(encoder.encode(sseDataFrame(out)));
           }
         }
 
@@ -661,12 +745,8 @@ function bridgeUpstreamToSSE(upstreamBody) {
       } catch {
         controller.enqueue(encoder.encode("event: error\ndata: stream_error\n\n"));
       } finally {
-        try {
-          reader.releaseLock();
-        } catch {}
-        try {
-          controller.close();
-        } catch {}
+        try { reader.releaseLock(); } catch {}
+        try { controller.close(); } catch {}
       }
     },
   });
@@ -710,6 +790,7 @@ function usage(path) {
       required_headers: ["content-type", "accept", "x-ops-asset-id"],
       body_json: { messages: [{ role: "user", content: "Hello" }], meta: {} },
       allowed_origins: Array.from(ALLOWED_ORIGINS),
+      brain_call: "service_binding: env.BRAIN",
     };
   }
   if (path === "/api/tts") {
@@ -728,7 +809,7 @@ function usage(path) {
       route: "/api/voice?mode=stt | /api/voice?mode=chat",
       method: "POST",
       required_headers: ["accept", "x-ops-asset-id"],
-      body_binary: "audio/webm (or wav/mp3/etc) OR JSON {audio_b64|audio[]}",
+      body_binary: "audio/webm (or wav/mp3/etc) OR multipart/form-data(audio=file) OR small JSON {audio_b64|audio[]}",
       allowed_origins: Array.from(ALLOWED_ORIGINS),
     };
   }
@@ -738,7 +819,7 @@ function usage(path) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const origin = getCallerOrigin(request);
+    const origin = request.headers.get("Origin") || "";
 
     const isChat = url.pathname === "/api/chat";
     const isVoice = url.pathname === "/api/voice";
@@ -764,17 +845,14 @@ export default {
       return json(200, usage(url.pathname), extra);
     }
 
-    // Only these routes exist
     if (!isChat && !isVoice && !isTts) {
       return json(404, { error: "Not found" }, corsHeaders(origin));
     }
 
-    // POST only for real work
     if (request.method !== "POST") {
       return json(405, { error: "Method not allowed" }, corsHeaders(origin));
     }
 
-    // Strict CORS for POST
     if (!isAllowedOrigin(origin)) {
       return json(
         403,
@@ -783,12 +861,10 @@ export default {
       );
     }
 
-    // Must have AI
     if (!env?.AI || typeof env.AI.run !== "function") {
       return json(500, { error: "Missing AI binding (env.AI)" }, corsHeaders(origin));
     }
 
-    // Enforce asset identity (Origin -> expected asset id)
     const assetCheck = verifyAssetIdentity(origin, request);
     if (!assetCheck.ok) {
       return json(
@@ -804,12 +880,11 @@ export default {
       );
     }
 
-    // Base response headers for successful paths
     const baseExtra = corsHeaders(origin);
     baseExtra.set("x-gabo-asset-verified", "1");
 
     // -----------------------
-    // /api/chat -> Guard -> Upstream -> SSE (TEXT DELTAS)
+    // /api/chat
     // -----------------------
     if (isChat) {
       const ct = (request.headers.get("content-type") || "").toLowerCase();
@@ -819,18 +894,25 @@ export default {
       if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
 
       let body;
-      try {
-        body = JSON.parse(raw);
-      } catch {
-        return json(400, { error: "Invalid JSON" }, baseExtra);
-      }
+      try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
 
       const messages = normalizeMessages(body.messages);
       if (!messages.length) return json(400, { error: "messages[] required" }, baseExtra);
 
       const metaSafe = sanitizeMeta(body.meta);
 
-      // Detect language (multi-language)
+      const lastUser = lastUserText(messages);
+      const allowAuthor = wantsAuthorDisclosure(lastUser);
+
+      // Model non-disclosure rule
+      if (wantsModelDisclosure(lastUser)) {
+        const msg =
+          `I can’t disclose the specific model identifiers or configuration.\n`
+          + `This assistant was created by ${AUTHOR_NAME}.\n`
+          + `It uses a mix of AI systems from multiple providers (for example, companies like Meta and Google), but exact model IDs are intentionally withheld.`;
+        return sse(oneShotSSE(msg), baseExtra);
+      }
+
       const langIso2 = await detectLangIso2(env, messages, metaSafe);
       if (!metaSafe.lang_iso2 || metaSafe.lang_iso2 === "auto" || metaSafe.lang_iso2 === "und") {
         metaSafe.lang_iso2 = langIso2;
@@ -838,36 +920,30 @@ export default {
 
       // Guard at edge
       let guardRes;
-      try {
-        guardRes = await env.AI.run(MODEL_GUARD, { messages });
-      } catch {
-        return json(502, { error: "Safety check unavailable" }, baseExtra);
-      }
+      try { guardRes = await env.AI.run(MODEL_GUARD, { messages }); }
+      catch { return json(502, { error: "Safety check unavailable" }, baseExtra); }
 
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, baseExtra);
 
-      // Call Upstream
-      let upstreamResp;
-      try {
-        upstreamResp = await callUpstream(env, { messages, meta: metaSafe });
-      } catch (e) {
-        return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, baseExtra);
-      }
+      // Call Brain (FIXED: forward Origin + asset-id)
+      let brainResp;
+      try { brainResp = await callBrainChat(env, { messages, meta: metaSafe }, origin, assetCheck.got); }
+      catch (e) { return json(502, { error: "Brain unreachable", detail: String(e?.message || e) }, baseExtra); }
 
-      if (!upstreamResp.ok) {
-        const t = await upstreamResp.text().catch(() => "");
-        return json(502, { error: "Upstream error", status: upstreamResp.status, detail: t.slice(0, 2000) }, baseExtra);
+      if (!brainResp.ok) {
+        const t = await brainResp.text().catch(() => "");
+        return json(502, { error: "Brain error", status: brainResp.status, detail: t.slice(0, 2000) }, baseExtra);
       }
 
       const extra = new Headers(baseExtra);
-      forwardUpstreamHeaders(extra, upstreamResp);
+      forwardBrainHeaders(extra, brainResp);
 
-      return sse(bridgeUpstreamToSSE(upstreamResp.body), extra);
+      return sse(bridgeBrainToSSE(brainResp.body, allowAuthor), extra);
     }
 
     // -----------------------
-    // /api/tts -> audio
+    // /api/tts
     // -----------------------
     if (isTts) {
       const ct = (request.headers.get("content-type") || "").toLowerCase();
@@ -877,11 +953,7 @@ export default {
       if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
 
       let body;
-      try {
-        body = JSON.parse(raw);
-      } catch {
-        return json(400, { error: "Invalid JSON" }, baseExtra);
-      }
+      try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
 
       const text = sanitizeContent(body?.text || "");
       if (!text) return json(400, { error: "text required" }, baseExtra);
@@ -904,7 +976,7 @@ export default {
     }
 
     // -----------------------
-    // /api/voice -> STT JSON (mode=stt) OR Guard -> Upstream -> SSE (TEXT DELTAS)
+    // /api/voice
     // -----------------------
     if (isVoice) {
       const mode = String(url.searchParams.get("mode") || "stt").toLowerCase();
@@ -915,16 +987,13 @@ export default {
       let priorMessages = [];
       let metaSafe = {};
 
+      // JSON (small only)
       if (ct.includes("application/json")) {
         const raw = await request.text().catch(() => "");
-        if (!raw || raw.length > MAX_BODY_CHARS) return json(413, { error: "Request too large" }, baseExtra);
+        if (!raw) return json(400, { error: "Empty JSON body" }, baseExtra);
 
         let body;
-        try {
-          body = JSON.parse(raw);
-        } catch {
-          return json(400, { error: "Invalid JSON" }, baseExtra);
-        }
+        try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
 
         priorMessages = normalizeMessages(body.messages);
         metaSafe = sanitizeMeta(body.meta);
@@ -945,14 +1014,32 @@ export default {
         } else {
           return json(400, { error: "Missing audio (audio_b64 or audio[])" }, baseExtra);
         }
-      } else {
+      }
+      // multipart/form-data
+      else if (ct.includes("multipart/form-data")) {
+        let fd;
+        try { fd = await request.formData(); }
+        catch { return json(400, { error: "Invalid multipart/form-data" }, baseExtra); }
+
+        const file = fd.get("audio") || fd.get("file") || fd.get("blob");
+        if (!file || typeof file === "string") {
+          return json(400, { error: "Missing audio file field (expected: audio|file|blob)" }, baseExtra);
+        }
+
+        const ab = await file.arrayBuffer().catch(() => null);
+        if (!ab || ab.byteLength < 16) return json(400, { error: "Empty audio" }, baseExtra);
+        if (ab.byteLength > MAX_AUDIO_BYTES) return json(413, { error: "Audio too large" }, baseExtra);
+        audioU8 = new Uint8Array(ab);
+      }
+      // raw binary
+      else {
         const buf = await request.arrayBuffer().catch(() => null);
         if (!buf || buf.byteLength < 16) return json(400, { error: "Empty audio" }, baseExtra);
         if (buf.byteLength > MAX_AUDIO_BYTES) return json(413, { error: "Audio too large" }, baseExtra);
         audioU8 = new Uint8Array(buf);
       }
 
-      // Whisper STT
+      // STT
       let sttOut;
       try {
         sttOut = await runSTT(env, audioU8, audioB64);
@@ -965,7 +1052,19 @@ export default {
       if (!transcript) return json(400, { error: "No transcription produced" }, baseExtra);
       if (looksMalicious(transcript)) return json(403, { error: "Blocked by security sanitizer" }, baseExtra);
 
-      // Detect STT language
+      const allowAuthor = wantsAuthorDisclosure(transcript);
+
+      // If user tries to get model IDs via voice, block disclosure
+      if (wantsModelDisclosure(transcript)) {
+        const msg =
+          `I can’t disclose the specific model identifiers or configuration.\n`
+          + `This assistant was created by ${AUTHOR_NAME}.\n`
+          + `It uses a mix of AI systems from multiple providers (for example, companies like Meta and Google), but exact model IDs are intentionally withheld.`;
+        const extraSse = new Headers(baseExtra);
+        extraSse.set("x-gabo-voice-timeout-sec", "120");
+        return sse(oneShotSSE(msg), extraSse);
+      }
+
       const langIso2 = await detectLangIso2(env, [{ role: "user", content: transcript }], metaSafe);
 
       const extra = new Headers(baseExtra);
@@ -976,38 +1075,34 @@ export default {
         return json(200, { transcript, lang_iso2: langIso2 || "und", voice_timeout_sec: 120 }, extra);
       }
 
-      const messages = priorMessages.length ? [...priorMessages, { role: "user", content: transcript }] : [{ role: "user", content: transcript }];
+      const messages = priorMessages.length
+        ? [...priorMessages, { role: "user", content: transcript }]
+        : [{ role: "user", content: transcript }];
 
       if (!metaSafe.lang_iso2 || metaSafe.lang_iso2 === "auto" || metaSafe.lang_iso2 === "und") {
         metaSafe.lang_iso2 = langIso2 || "und";
       }
 
-      // Guard at edge
+      // Guard
       let guardRes;
-      try {
-        guardRes = await env.AI.run(MODEL_GUARD, { messages });
-      } catch {
-        return json(502, { error: "Safety check unavailable" }, extra);
-      }
+      try { guardRes = await env.AI.run(MODEL_GUARD, { messages }); }
+      catch { return json(502, { error: "Safety check unavailable" }, extra); }
 
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, extra);
 
-      // Call Upstream
-      let upstreamResp;
-      try {
-        upstreamResp = await callUpstream(env, { messages, meta: metaSafe });
-      } catch (e) {
-        return json(502, { error: "Upstream unreachable", detail: String(e?.message || e) }, extra);
+      // Brain (FIXED: forward Origin + asset-id)
+      let brainResp;
+      try { brainResp = await callBrainChat(env, { messages, meta: metaSafe }, origin, assetCheck.got); }
+      catch (e) { return json(502, { error: "Brain unreachable", detail: String(e?.message || e) }, extra); }
+
+      if (!brainResp.ok) {
+        const t = await brainResp.text().catch(() => "");
+        return json(502, { error: "Brain error", status: brainResp.status, detail: t.slice(0, 2000) }, extra);
       }
 
-      if (!upstreamResp.ok) {
-        const t = await upstreamResp.text().catch(() => "");
-        return json(502, { error: "Upstream error", status: upstreamResp.status, detail: t.slice(0, 2000) }, extra);
-      }
-
-      forwardUpstreamHeaders(extra, upstreamResp);
-      return sse(bridgeUpstreamToSSE(upstreamResp.body), extra);
+      forwardBrainHeaders(extra, brainResp);
+      return sse(bridgeBrainToSSE(brainResp.body, allowAuthor), extra);
     }
 
     return json(500, { error: "Unhandled route" }, baseExtra);
