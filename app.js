@@ -865,7 +865,7 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-const init = async () => {
+const initApp = async () => {
   await loadRegistryConfig();
   warnIfOriginMissing();
   updateSendState();
@@ -873,4 +873,4 @@ const init = async () => {
   stopThinking();
 };
 
-init();
+initApp();
