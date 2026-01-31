@@ -57,6 +57,7 @@ const ALLOWED_ORIGINS = new Set(Array.from(ORIGIN_ASSET_ID.keys()));
 // -------------------------
 const HOP_HDR = "x-gabo-hop";
 const HOP_VAL = "gateway";
+const ORIGIN_FWD_HDR = "x-gabo-origin";
 
 // -------------------------
 // Models (Gateway)
@@ -105,6 +106,20 @@ function securityHeaders() {
 // -------------------------
 // CORS
 // -------------------------
+function getCallerOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (origin && origin !== "null") return origin;
+  const forwarded = request.headers.get(ORIGIN_FWD_HDR);
+  if (forwarded) return forwarded;
+  const referer = request.headers.get("Referer");
+  if (referer) {
+    try {
+      return new URL(referer).origin;
+    } catch {}
+  }
+  return "";
+}
+
 function isAllowedOrigin(origin) {
   return !!origin && origin !== "null" && ALLOWED_ORIGINS.has(origin);
 }
@@ -126,6 +141,7 @@ function corsHeaders(origin) {
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
       "cf-turnstile-response",
+      "x-gabo-origin",
       // repo parity: UI language hints
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
@@ -733,7 +749,7 @@ function usage(path) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const origin = request.headers.get("Origin") || "";
+    const origin = getCallerOrigin(request);
 
     const isChat = url.pathname === "/api/chat";
     const isVoice = url.pathname === "/api/voice";
