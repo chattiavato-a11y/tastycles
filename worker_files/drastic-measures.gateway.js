@@ -22,11 +22,18 @@
 // -------------------------
 // Allowed Origins + Asset IDs (Origin -> AssetID)
 // -------------------------
+// NOTE: You requested gabos.io (not gabo.io).
+// I mapped gabos.io to the SAME asset IDs you previously used for gabo.io.
+// If you created NEW asset IDs for gabos.io, replace these two values.
 const ORIGIN_ASSET_ID = new Map([
-  // gabos.io
+  // gabos.io (UPDATED)
   [
     "https://www.gabos.io",
     "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
+  ],
+  [
+    "https://gabos.io",
+    "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
   ],
 
   // GitHub Pages host
@@ -43,6 +50,12 @@ const ORIGIN_ASSET_ID = new Map([
 ]);
 
 const ALLOWED_ORIGINS = new Set(Array.from(ORIGIN_ASSET_ID.keys()));
+
+// Reverse map (asset-id -> origin) so we can infer origin when Origin header is missing
+const ASSET_ID_TO_ORIGIN = new Map();
+for (const [o, id] of ORIGIN_ASSET_ID.entries()) {
+  if (id) ASSET_ID_TO_ORIGIN.set(id, o);
+}
 
 // -------------------------
 // Hop header parity (MUST match Brain)
@@ -200,6 +213,8 @@ function corsHeaders(origin) {
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
       "x-gabo-voice-language",
+      // optional forward hint if you ever want it:
+      "x-gabo-origin",
     ].join(", ")
   );
 
@@ -384,9 +399,8 @@ function detectLangIso2Heuristic(text) {
   const t = t0.toLowerCase();
 
   if (/[ñáéíóúü¿¡]/i.test(t)) return "es";
-  const esHits = [
-    "hola","gracias","por favor","buenos","buenas","necesito","ayuda","quiero","donde","qué","cuánto","porque",
-  ].filter((w) => t.includes(w)).length;
+  const esHits = ["hola","gracias","por favor","buenos","buenas","necesito","ayuda","quiero","donde","qué","cuánto","porque"]
+    .filter((w) => t.includes(w)).length;
   if (esHits >= 2) return "es";
 
   if (/[ãõç]/i.test(t)) return "pt";
@@ -499,6 +513,25 @@ function verifyAssetIdentity(origin, request) {
 }
 
 // -------------------------
+// Origin resolution (MATCHES Brain behavior + fixes "(none)")
+// -------------------------
+// If Origin header is missing (Worker/proxy/server-side), infer Origin from x-ops-asset-id
+function resolveEffectiveOrigin(request) {
+  const originHdr = safeTextOnly(request.headers.get("Origin") || "");
+  if (isAllowedOrigin(originHdr)) return originHdr;
+
+  // Optional: allow a forwarded origin hint (if you ever add it)
+  const fwd = safeTextOnly(request.headers.get("x-gabo-origin") || "");
+  if (isAllowedOrigin(fwd)) return fwd;
+
+  const assetId = safeTextOnly(request.headers.get("x-ops-asset-id") || "");
+  const inferred = ASSET_ID_TO_ORIGIN.get(assetId) || "";
+  if (isAllowedOrigin(inferred)) return inferred;
+
+  return originHdr || fwd || "";
+}
+
+// -------------------------
 // Base64 helpers
 // -------------------------
 function bytesToBase64(u8) {
@@ -547,7 +580,8 @@ async function runSTT(env, audioU8, audioB64Maybe) {
 }
 
 // -------------------------
-// Brain call (SERVICE BINDING) — FIXED (forward Origin + asset id)
+// Brain call (SERVICE BINDING) — MATCHES Brain enforcement
+// - Forwards Origin + x-ops-asset-id so Brain never sees "(none)"
 // -------------------------
 function requireBrain(env) {
   if (!env?.BRAIN || typeof env.BRAIN.fetch !== "function") {
@@ -559,7 +593,6 @@ function requireBrain(env) {
 async function callBrainChat(env, payload, origin, assetId) {
   const brain = requireBrain(env);
 
-  // Brain enforces Origin allowlist + asset-id. Service binding calls don't include Origin by default.
   const safeOrigin = String(origin || "").trim() || "https://drastic-measures.rulathemtodos.workers.dev";
   const safeAssetId = String(assetId || "").trim();
 
@@ -570,7 +603,7 @@ async function callBrainChat(env, payload, origin, assetId) {
       accept: "text/event-stream",
       [HOP_HDR]: HOP_VAL,
 
-      // Forward identity so Brain doesn't see "(none)"
+      // Critical for Brain allowlist enforcement:
       Origin: safeOrigin,
       "x-ops-asset-id": safeAssetId,
     },
@@ -815,50 +848,58 @@ function usage(path) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const origin = request.headers.get("Origin") || "";
+
+    // Raw Origin header (browser)
+    const originHdr = request.headers.get("Origin") || "";
+
+    // Effective origin (browser OR inferred from asset-id)
+    const origin = resolveEffectiveOrigin(request) || "";
 
     const isChat = url.pathname === "/api/chat";
     const isVoice = url.pathname === "/api/voice";
     const isTts = url.pathname === "/api/tts";
 
+    // Use the best available origin for CORS headers
+    const corsOrigin = originHdr || origin;
+
     // Preflight
     if (request.method === "OPTIONS") {
-      const h = corsHeaders(origin);
+      const h = corsHeaders(corsOrigin);
       securityHeaders().forEach((v, k) => h.set(k, v));
       return new Response(null, { status: 204, headers: h });
     }
 
     // Health
     if (url.pathname === "/" || url.pathname === "/health") {
-      const h = corsHeaders(origin);
+      const h = corsHeaders(corsOrigin);
       securityHeaders().forEach((v, k) => h.set(k, v));
       return new Response("gateway: ok", { status: 200, headers: h });
     }
 
     // Helpful GET usage
     if (request.method === "GET" && (isChat || isVoice || isTts)) {
-      const extra = corsHeaders(origin);
+      const extra = corsHeaders(corsOrigin);
       return json(200, usage(url.pathname), extra);
     }
 
     if (!isChat && !isVoice && !isTts) {
-      return json(404, { error: "Not found" }, corsHeaders(origin));
+      return json(404, { error: "Not found" }, corsHeaders(corsOrigin));
     }
 
     if (request.method !== "POST") {
-      return json(405, { error: "Method not allowed" }, corsHeaders(origin));
+      return json(405, { error: "Method not allowed" }, corsHeaders(corsOrigin));
     }
 
     if (!isAllowedOrigin(origin)) {
       return json(
         403,
         { error: "Origin not allowed", saw_origin: origin || "(none)", allowed: Array.from(ALLOWED_ORIGINS) },
-        corsHeaders(origin)
+        corsHeaders(corsOrigin)
       );
     }
 
     if (!env?.AI || typeof env.AI.run !== "function") {
-      return json(500, { error: "Missing AI binding (env.AI)" }, corsHeaders(origin));
+      return json(500, { error: "Missing AI binding (env.AI)" }, corsHeaders(corsOrigin));
     }
 
     const assetCheck = verifyAssetIdentity(origin, request);
@@ -872,11 +913,11 @@ export default {
           got_asset_id: assetCheck.got || "(none)",
           expected_asset_id: assetCheck.expected || "(missing mapping)",
         },
-        corsHeaders(origin)
+        corsHeaders(corsOrigin)
       );
     }
 
-    const baseExtra = corsHeaders(origin);
+    const baseExtra = corsHeaders(corsOrigin);
     baseExtra.set("x-gabo-asset-verified", "1");
 
     // -----------------------
@@ -903,9 +944,9 @@ export default {
       // Model non-disclosure rule
       if (wantsModelDisclosure(lastUser)) {
         const msg =
-          `I can’t disclose the specific model identifiers or configuration.\n`
-          + `This assistant was created by ${AUTHOR_NAME}.\n`
-          + `It uses a mix of AI systems from multiple providers (for example, companies like Meta and Google), but exact model IDs are intentionally withheld.`;
+          `I can’t disclose the specific model identifiers or configuration.\n` +
+          `This assistant was created by ${AUTHOR_NAME}.\n` +
+          `It uses a mix of AI systems from multiple providers (for example, companies like Meta and Google), but exact model IDs are intentionally withheld.`;
         return sse(oneShotSSE(msg), baseExtra);
       }
 
@@ -922,7 +963,7 @@ export default {
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, baseExtra);
 
-      // Call Brain (FIXED: forward Origin + asset-id)
+      // Call Brain (forward Origin + asset-id so Brain passes allowlist)
       let brainResp;
       try { brainResp = await callBrainChat(env, { messages, meta: metaSafe }, origin, assetCheck.got); }
       catch (e) { return json(502, { error: "Brain unreachable", detail: String(e?.message || e) }, baseExtra); }
@@ -1050,12 +1091,11 @@ export default {
 
       const allowAuthor = wantsAuthorDisclosure(transcript);
 
-      // If user tries to get model IDs via voice, block disclosure
       if (wantsModelDisclosure(transcript)) {
         const msg =
-          `I can’t disclose the specific model identifiers or configuration.\n`
-          + `This assistant was created by ${AUTHOR_NAME}.\n`
-          + `It uses a mix of AI systems from multiple providers (for example, companies like Meta and Google), but exact model IDs are intentionally withheld.`;
+          `I can’t disclose the specific model identifiers or configuration.\n` +
+          `This assistant was created by ${AUTHOR_NAME}.\n` +
+          `It uses a mix of AI systems from multiple providers (for example, companies like Meta and Google), but exact model IDs are intentionally withheld.`;
         const extraSse = new Headers(baseExtra);
         extraSse.set("x-gabo-voice-timeout-sec", "120");
         return sse(oneShotSSE(msg), extraSse);
@@ -1087,7 +1127,7 @@ export default {
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(403, { error: "Blocked by safety filter", categories: verdict.categories }, extra);
 
-      // Brain (FIXED: forward Origin + asset-id)
+      // Brain (forward Origin + asset-id)
       let brainResp;
       try { brainResp = await callBrainChat(env, { messages, meta: metaSafe }, origin, assetCheck.got); }
       catch (e) { return json(502, { error: "Brain unreachable", detail: String(e?.message || e) }, extra); }
