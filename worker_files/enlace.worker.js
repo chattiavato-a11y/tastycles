@@ -57,12 +57,14 @@ const ALLOWED_ORIGINS = new Set(Array.from(ORIGIN_ASSET_ID.keys()));
 // -------------------------
 const HOP_HDR = "x-gabo-hop";
 const HOP_VAL = "gateway";
+const ORIGIN_FWD_HDR = "x-gabo-origin";
 
 // -------------------------
 // Models (Gateway)
 // -------------------------
 const MODEL_GUARD = "@cf/meta/llama-guard-3-8b";
-const MODEL_STT = "@cf/openai/whisper-large-v3-turbo";
+const MODEL_STT_TURBO = "@cf/openai/whisper-large-v3-turbo";
+const MODEL_STT_FALLBACK = "@cf/openai/whisper";
 const TTS_EN = "@cf/deepgram/aura-2-en";
 const TTS_ES = "@cf/deepgram/aura-2-es";
 const TTS_FALLBACK = "@cf/myshell-ai/melotts";
@@ -81,6 +83,7 @@ const MAX_BODY_CHARS = 8_000;
 const MAX_MESSAGES = 30;
 const MAX_MESSAGE_CHARS = 1_000;
 const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
+const MAX_VOICE_JSON_AUDIO_B64_CHARS = 2_500_000;
 
 // -------------------------
 // Security headers (repo parity)
@@ -103,6 +106,20 @@ function securityHeaders() {
 // -------------------------
 // CORS
 // -------------------------
+function getCallerOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (origin && origin !== "null") return origin;
+  const forwarded = request.headers.get(ORIGIN_FWD_HDR);
+  if (forwarded) return forwarded;
+  const referer = request.headers.get("Referer");
+  if (referer) {
+    try {
+      return new URL(referer).origin;
+    } catch {}
+  }
+  return "";
+}
+
 function isAllowedOrigin(origin) {
   return !!origin && origin !== "null" && ALLOWED_ORIGINS.has(origin);
 }
@@ -124,6 +141,7 @@ function corsHeaders(origin) {
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
       "cf-turnstile-response",
+      "x-gabo-origin",
       // repo parity: UI language hints
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
@@ -423,12 +441,28 @@ function verifyAssetIdentity(origin, request) {
 // -------------------------
 // Voice helpers (Whisper STT) — shared pattern
 // -------------------------
-async function runWhisper(env, audioU8) {
+async function runSTT(env, audioU8, audioB64Maybe) {
+  const audioB64 = (typeof audioB64Maybe === "string" && audioB64Maybe.length >= 16)
+    ? audioB64Maybe
+    : bytesToBase64(audioU8);
   try {
-    return await env.AI.run(MODEL_STT, { audio: audioU8.buffer });
-  } catch {
-    return await env.AI.run(MODEL_STT, { audio: Array.from(audioU8) });
+    return await env.AI.run(MODEL_STT_TURBO, { audio: audioB64 });
+  } catch (error) {
+    if (audioU8 && audioU8.byteLength <= 1_500_000) {
+      return await env.AI.run(MODEL_STT_FALLBACK, { audio: Array.from(audioU8) });
+    }
+    throw error;
   }
+}
+
+function bytesToBase64(u8) {
+  const chunk = 0x8000;
+  let binary = "";
+  for (let i = 0; i < u8.length; i += chunk) {
+    const sub = u8.subarray(i, i + chunk);
+    binary += String.fromCharCode(...sub);
+  }
+  return btoa(binary);
 }
 
 function base64ToBytes(b64) {
@@ -715,7 +749,7 @@ function usage(path) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const origin = request.headers.get("Origin") || "";
+    const origin = getCallerOrigin(request);
 
     const isChat = url.pathname === "/api/chat";
     const isVoice = url.pathname === "/api/voice";
@@ -874,6 +908,7 @@ export default {
       const ct = (request.headers.get("content-type") || "").toLowerCase();
 
       let audioU8 = null;
+      let audioB64 = "";
       let priorMessages = [];
       let metaSafe = {};
 
@@ -888,6 +923,10 @@ export default {
         metaSafe = sanitizeMeta(body.meta);
 
         if (typeof body.audio_b64 === "string" && body.audio_b64.length) {
+          if (body.audio_b64.length > MAX_VOICE_JSON_AUDIO_B64_CHARS) {
+            return json(413, { error: "audio_b64 too large; send binary audio instead" }, baseExtra);
+          }
+          audioB64 = body.audio_b64;
           const bytes = base64ToBytes(body.audio_b64);
           if (bytes.byteLength > MAX_AUDIO_BYTES) return json(413, { error: "Audio too large" }, baseExtra);
           audioU8 = bytes;
@@ -908,7 +947,7 @@ export default {
 
       // Whisper STT
       let sttOut;
-      try { sttOut = await runWhisper(env, audioU8); }
+      try { sttOut = await runSTT(env, audioU8, audioB64); }
       catch (e) { return json(502, { error: "Whisper unavailable", detail: String(e?.message || e) }, baseExtra); }
 
       const transcriptRaw = sttOut?.text || sttOut?.result?.text || sttOut?.response?.text || "";
