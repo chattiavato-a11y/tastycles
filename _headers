@@ -1,6 +1,6 @@
 /*
   Content-Security-Policy: default-src 'self'; base-uri 'self'; connect-src 'self' https://drastic-measures.rulathemtodos.workers.dev https://chattiavato-a11y.github.io; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'; media-src 'self' blob:; upgrade-insecure-requests; block-all-mixed-content
-  Access-Control-Allow-Origin: https://gabo.io
+  Access-Control-Allow-Origin: https://gabos.io
   Access-Control-Allow-Methods: GET, POST, OPTIONS
   Access-Control-Allow-Headers: Content-Type, Accept, X-Ops-Asset-Id, X-Ops-Src-Sha512-B64, CF-Turnstile-Response
   Access-Control-Max-Age: 86400
