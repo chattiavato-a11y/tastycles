@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gabos.io/schemas/asset-registry.schema.json",
+  "$id": "https://www.gabos.io/schemas/asset-registry.schema.json",
   "title": "Asset Registry Record",
   "description": "Registry schema for asset inventory, integrity, and governance metadata.",
   "type": "object",
