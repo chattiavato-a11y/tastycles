@@ -4,9 +4,9 @@ const sendBtn = document.getElementById("send-btn");
 const chatLog = document.getElementById("chat-log");
 // --- OPS Asset Identity (Origin -> AssetId) ---
 const OPS_ASSET_BY_ORIGIN = {
-  "https://www.gabo.io":
+  "https://www.gabos.io":
     "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
-  "https://gabo.io":
+  "https://gabos.io":
     "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
   "https://drastic-measures.rulathemtodos.workers.dev":
     "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
@@ -32,8 +32,8 @@ const defaultConfig = {
   gatewayEndpointAssetId: "",
 
   allowedOrigins: [
-    "https://www.gabo.io",
-    "https://gabo.io",
+    "https://www.gabos.io",
+    "https://gabos.io",
     "https://drastic-measures.rulathemtodos.workers.dev",
     "https://chattiavato-a11y.github.io",
   ],
