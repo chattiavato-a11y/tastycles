@@ -66,7 +66,15 @@ body { margin: 0; }
 
   .voice-helper{ flex-basis: 100%; order: 4; }
   #micBtn{ order: 2; }
-  .send-btn{ order: 3; width: 100%; }
+  .send-btn{
+    order: 3;
+    width: auto;
+    min-width: 96px;
+    max-width: 140px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    align-self: flex-end;
+  }
 }
 
 /* ✅ Short screens */
