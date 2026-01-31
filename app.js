@@ -167,6 +167,26 @@ const TRANSLATIONS = {
     gaboIntro:
       "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Gabo tunnistaa kielesi ja vastaa samalla kielellä.",
   },
+  tl: {
+    welcome: "Maligayang pagdating",
+    startConversation: "Simulan ang usapan",
+    introCopy:
+      "Makipag-chat sa anumang wika — pasalita man o pasulat. Awtomatikong kinikilala ng Gabo ang iyong wika at sumasagot nang naaayon.",
+    greeting: "Kamusta",
+    farewell: "Paalam",
+    gaboIntro:
+      "Makipag-chat sa anumang wika — pasalita man o pasulat. Awtomatikong kinikilala ng Gabo ang iyong wika at sumasagot nang naaayon.",
+  },
+  ja: {
+    welcome: "ようこそ",
+    startConversation: "会話を始める",
+    introCopy:
+      "どの言語でも会話できます — 話し言葉でも書き言葉でも。Gabo が言語を自動判別し、同じ言語で返信します。",
+    greeting: "こんにちは",
+    farewell: "さようなら",
+    gaboIntro:
+      "どの言語でも会話できます — 話し言葉でも書き言葉でも。Gabo が言語を自動判別し、同じ言語で返信します。",
+  },
 };
 
 let workerEndpoint = defaultConfig.workerEndpoint;
@@ -226,6 +246,45 @@ const applyTranslations = () => {
       }
     });
   });
+};
+
+const INTRO_I18N_KEYS = ["welcome", "startConversation", "introCopy"];
+const INTRO_ROTATION_LOCALES = [
+  "es",
+  "pt",
+  "en",
+  "fr",
+  "de",
+  "fr",
+  "tl",
+  "zh",
+  "ja",
+  "yue",
+];
+
+const setIntroLocale = (locale) => {
+  const pack = TRANSLATIONS[locale] ?? TRANSLATIONS.en;
+  INTRO_I18N_KEYS.forEach((key) => {
+    const value = pack[key];
+    if (!value) return;
+    document.querySelectorAll(`[data-i18n="${key}"]`).forEach((el) => {
+      el.textContent = value;
+      el.setAttribute("lang", locale);
+      el.setAttribute("dir", getTextDirection(value));
+    });
+  });
+};
+
+const startIntroRotation = () => {
+  if (!INTRO_ROTATION_LOCALES.length) return;
+  const preferred = getPreferredLocale();
+  let index = INTRO_ROTATION_LOCALES.indexOf(preferred);
+  if (index < 0) index = 0;
+  setIntroLocale(INTRO_ROTATION_LOCALES[index]);
+  window.setInterval(() => {
+    index = (index + 1) % INTRO_ROTATION_LOCALES.length;
+    setIntroLocale(INTRO_ROTATION_LOCALES[index]);
+  }, 30000);
 };
 
 const PAGE_GRADIENTS = [
@@ -367,6 +426,7 @@ const rotateBackgroundGradient = () => {
 
 rotateBackgroundGradient();
 applyTranslations();
+startIntroRotation();
 
 input.addEventListener("input", updateSendState);
 input.addEventListener("focus", () => {
