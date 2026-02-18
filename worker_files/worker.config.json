@@ -35,6 +35,7 @@
       "list_header": "x-gabo-lang-list",
       "voice_language_header": "x-gabo-voice-language"
     },
+
     "optional_integrity_header": "x-ops-src-sha512-b64"
   },
   "routes": {

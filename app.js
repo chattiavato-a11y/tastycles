@@ -333,7 +333,6 @@ const thinkingStatus = document.getElementById("thinking-status");
 const voiceHelper = document.getElementById("voice-helper");
 const cancelBtn = document.getElementById("cancel-btn");
 const HONEYPOT_HEADER_NAME = "x-gabo-honeypot";
-const PRE_HONEYPOT_HEADER_NAME = "x-gabo-honeypot-pre";
 
 const setSecurityMessage = (text) => {
   if (!voiceHelper) return;
@@ -371,9 +370,8 @@ const logResponseMeta = (headers) => {
 
 const updateSendState = () => {
   const hasText = input.value.trim().length > 0;
-  const postHoneypotTripped = Boolean(honeypotField?.value?.trim());
-  const preHoneypotTripped = Boolean(preHoneypotField?.value?.trim());
-  sendBtn.disabled = isStreaming || !hasText || postHoneypotTripped || preHoneypotTripped;
+  const honeypotTripped = Boolean(honeypotField?.value?.trim());
+  sendBtn.disabled = isStreaming || !hasText || honeypotTripped;
   if (input) {
     input.readOnly = false;
   }
@@ -869,7 +867,6 @@ const buildLanguageHeaders = (language) => {
 const buildSecurityHeaders = (language) => ({
   ...buildLanguageHeaders(language),
   [HONEYPOT_HEADER_NAME]: String(honeypotField?.value || "").trim(),
-  [PRE_HONEYPOT_HEADER_NAME]: String(preHoneypotField?.value || "").trim(),
 });
 
 const streamWorkerResponse = async (response, bubble) => {

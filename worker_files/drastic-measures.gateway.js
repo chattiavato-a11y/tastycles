@@ -994,7 +994,6 @@ export default {
         {
           error: "Blocked by honeypot",
           detail: "Automated submission detected.",
-          tiny_ml_honeypot_risk: honeypotRisk,
         },
         baseExtra
       );
