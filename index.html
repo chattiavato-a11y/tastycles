@@ -83,9 +83,17 @@
           Cancel
         </button>
       </form>
+      <div id="turnstile-container" class="turnstile-shell" aria-live="polite">
+        <div id="turnstile-widget"></div>
+      </div>
     </footer>
   </main>
 
+  <script
+    src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+    async
+    defer
+  ></script>
   <script src="worker_files/client.worker.js"></script>
   <script src="app.js"></script>
 </body>

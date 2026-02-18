@@ -506,6 +506,11 @@ function expectedAssetIdForOrigin(origin) {
   return ORIGIN_ASSET_ID.get(origin) || "";
 }
 
+function hasTurnstileToken(request) {
+  const token = safeTextOnly(request.headers.get("cf-turnstile-response") || "");
+  return token.length > 0;
+}
+
 function verifyAssetIdentity(origin, request) {
   const got = safeTextOnly(request.headers.get("x-ops-asset-id") || "");
   const expected = expectedAssetIdForOrigin(origin);
@@ -919,6 +924,17 @@ export default {
 
     const baseExtra = corsHeaders(corsOrigin);
     baseExtra.set("x-gabo-asset-verified", "1");
+
+    if (!hasTurnstileToken(request)) {
+      return json(
+        403,
+        {
+          error: "Missing Turnstile token",
+          detail: "Pass cf-turnstile-response header with a valid token.",
+        },
+        baseExtra
+      );
+    }
 
     // -----------------------
     // /api/chat

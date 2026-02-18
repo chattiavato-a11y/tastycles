@@ -329,6 +329,74 @@ const isOriginAllowed = (origin, allowedList) => {
 const thinkingStatus = document.getElementById("thinking-status");
 const voiceHelper = document.getElementById("voice-helper");
 const cancelBtn = document.getElementById("cancel-btn");
+const TURNSTILE_SITE_KEY = "0x4AAAAAACfBGVCLgKK_DToK";
+const TURNSTILE_HEADER_NAME = "cf-turnstile-response";
+let turnstileWidgetId = null;
+let turnstileToken = "";
+
+const setTurnstileMessage = (text) => {
+  if (!voiceHelper) return;
+  voiceHelper.textContent = text || "";
+};
+
+const resetTurnstile = () => {
+  if (window.turnstile && turnstileWidgetId !== null) {
+    try {
+      window.turnstile.reset(turnstileWidgetId);
+    } catch (error) {
+      console.warn("Unable to reset Turnstile widget.", error);
+    }
+  }
+  turnstileToken = "";
+};
+
+const initTurnstile = () => {
+  const container = document.getElementById("turnstile-widget");
+  if (!container) return;
+
+  const renderWidget = () => {
+    if (!window.turnstile || turnstileWidgetId !== null) return;
+    try {
+      turnstileWidgetId = window.turnstile.render(container, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token) => {
+          turnstileToken = String(token || "");
+          setTurnstileMessage("Security check passed.");
+        },
+        "expired-callback": () => {
+          turnstileToken = "";
+          setTurnstileMessage("Security check expired. Please verify again.");
+        },
+        "error-callback": () => {
+          turnstileToken = "";
+          setTurnstileMessage("Security check unavailable. Please retry.");
+        },
+      });
+    } catch (error) {
+      console.error("Turnstile render failed:", error);
+      setTurnstileMessage("Security check unavailable.");
+    }
+  };
+
+  if (window.turnstile) {
+    renderWidget();
+    return;
+  }
+
+  const start = Date.now();
+  const interval = window.setInterval(() => {
+    if (window.turnstile) {
+      window.clearInterval(interval);
+      renderWidget();
+      return;
+    }
+    if (Date.now() - start > 10000) {
+      window.clearInterval(interval);
+      setTurnstileMessage("Security check unavailable. Refresh and try again.");
+    }
+  }, 150);
+};
+
 const thinkingFrames = ["Thinking.", "Thinking..", "Thinking...", "Thinking...."];
 let thinkingInterval = null;
 let thinkingIndex = 0;
@@ -514,7 +582,7 @@ async function playVoiceReply(text) {
   const res = await window.WorkerClient.postTTS(
     { text, language: voiceLanguage || undefined },
     {
-      extraHeaders: buildLanguageHeaders(voiceLanguage),
+      extraHeaders: buildSecurityHeaders(voiceLanguage),
     }
   );
   if (!res.ok) {
@@ -592,7 +660,7 @@ async function stopMicAndTranscribe() {
   }
   const preferredLanguage = getPreferredLanguage();
   const res = await window.WorkerClient.postVoiceSTT(blob, {
-    extraHeaders: buildLanguageHeaders(preferredLanguage),
+    extraHeaders: buildSecurityHeaders(preferredLanguage),
   });
 
   if (!res.ok) {
@@ -750,6 +818,16 @@ const buildLanguageHeaders = (language) => {
   };
 };
 
+const buildSecurityHeaders = (language) => {
+  const headers = {
+    ...buildLanguageHeaders(language),
+  };
+  if (turnstileToken) {
+    headers[TURNSTILE_HEADER_NAME] = turnstileToken;
+  }
+  return headers;
+};
+
 const streamWorkerResponse = async (response, bubble) => {
   if (!response.body) {
     bubble.textContent = "We couldn't connect to the assistant stream.";
@@ -875,6 +953,13 @@ form.addEventListener("submit", async (event) => {
       return;
     }
 
+    if (!turnstileToken) {
+      assistantBubble.textContent =
+        "Please complete the security check before sending a message.";
+      stopThinking();
+      return;
+    }
+
     const response = await window.WorkerClient.postChat(
       {
         messages: buildMessages(message),
@@ -887,7 +972,12 @@ form.addEventListener("submit", async (event) => {
           voice_language: lastVoiceLanguage || undefined,
         },
       },
-      { signal: controller.signal }
+      {
+        signal: controller.signal,
+        extraHeaders: {
+          [TURNSTILE_HEADER_NAME]: turnstileToken,
+        },
+      }
     );
 
     if (!response.ok) {
@@ -923,6 +1013,7 @@ form.addEventListener("submit", async (event) => {
     setStreamingState(false);
     stopThinking();
     voiceReplyRequested = false;
+    resetTurnstile();
   }
 });
 
@@ -932,6 +1023,7 @@ const initApp = async () => {
   updateSendState();
   updateCancelState();
   stopThinking();
+  initTurnstile();
 };
 
 initApp();
