@@ -11,5 +11,6 @@
   X-DNS-Prefetch-Control: off
   X-Permitted-Cross-Domain-Policies: none
   X-Frame-Options: DENY
+  Cross-Origin-Resource-Policy: same-site
   Permissions-Policy: camera=(), geolocation=(), microphone=(self)
   X-XSS-Protection: 0

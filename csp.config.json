@@ -2,8 +2,26 @@
   "nonce_placeholder": "{{CSP_NONCE}}",
   "script_hashes": [],
   "style_hashes": [],
+  "controls": {
+    "csp": true,
+    "cors": true,
+    "corp": true,
+    "hsts": true,
+    "x_frame_options": true,
+    "x_content_type_options": true,
+    "referrer_policy": true,
+    "sri": true
+  },
+  "compliance": {
+    "nist_csf": true,
+    "cisa_cyber_essentials": true,
+    "pci_dss": true,
+    "owasp": true,
+    "seo_google_search_console": true
+  },
   "notes": [
-    "Populate script_hashes/style_hashes with sha256-<base64> values if you add inline scripts/styles.",
-    "Rotate CSP_NONCE per response at the edge (Cloudflare Worker/Pages) and inject it into the CSP header and any inline tags if used."
+    "Populate script_hashes/style_hashes with sha256-<base64> values for any inline assets.",
+    "Rotate CSP_NONCE per response at the edge if inline scripts/styles are introduced.",
+    "Keep SRI hashes in index.html synchronized with file updates."
   ]
 }

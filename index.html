@@ -22,8 +22,8 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="css/main.css" />
-  <link rel="stylesheet" href="css/adapt_screens.css" />
+  <link rel="stylesheet" href="css/main.css" integrity="sha384-qV5DaqcrkY9GEDD/sad+zOjUBD7OXxESgL3usP7QnP/zNusOrM1ORZmOfZxK2jDh" crossorigin="anonymous" />
+  <link rel="stylesheet" href="css/adapt_screens.css" integrity="sha384-RWM7g6QN8U8yngCdWMac1OTyKAg7POPsRnzFJ+6Tsu7xVfoBfYl2iuSoInyQhzRC" crossorigin="anonymous" />
 </head>
 <body>
   <main class="chat-app" aria-label="Gabo chat interface">
@@ -55,6 +55,18 @@
 
     <footer class="chat-footer">
       <form id="chat-form" class="input-shell" autocomplete="off">
+        <label class="honeypot-field" for="contact-field" aria-hidden="true">
+          Leave this field empty
+        </label>
+        <input
+          id="contact-field"
+          class="honeypot-field"
+          type="text"
+          name="contact"
+          tabindex="-1"
+          autocomplete="off"
+          aria-hidden="true"
+        />
         <input
           id="msgInput"
           type="text"

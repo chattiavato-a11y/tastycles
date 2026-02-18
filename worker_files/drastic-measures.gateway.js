@@ -213,6 +213,7 @@ function corsHeaders(origin) {
       "x-gabo-lang-list",
       "x-gabo-voice-language",
       "x-gabo-honeypot",
+      "x-gabo-honeypot-pre",
       // optional forward hint if you ever want it:
       "x-gabo-origin",
     ].join(", ")
@@ -378,6 +379,25 @@ function sanitizeWithIntegrity(text) {
 
 function getHoneypotValue(request) {
   return safeTextOnly(request.headers.get("x-gabo-honeypot") || "");
+}
+
+function getPreHoneypotValue(request) {
+  return safeTextOnly(request.headers.get("x-gabo-honeypot-pre") || "");
+}
+
+function tinyMlHoneypotRiskScore(value) {
+  const v = safeTextOnly(value || "");
+  if (!v) return 0;
+  let score = 0;
+  const rules = [
+    /https?:\/\//i,
+    /@/,
+    /(select|insert|union|drop|script|function|return|const|let|var)/i,
+    /[{}<>;=()]/,
+  ];
+  for (const rule of rules) if (rule.test(v)) score += 2;
+  if (v.length > 4) score += 2;
+  return score;
 }
 
 function normalizeMessages(input) {
@@ -966,7 +986,9 @@ export default {
     baseExtra.set("x-gabo-asset-verified", "1");
 
     const honeypotValue = getHoneypotValue(request);
-    if (honeypotValue) {
+    const preHoneypotValue = getPreHoneypotValue(request);
+    const honeypotRisk = tinyMlHoneypotRiskScore(honeypotValue) + tinyMlHoneypotRiskScore(preHoneypotValue);
+    if (honeypotValue || preHoneypotValue || honeypotRisk >= 2) {
       return json(
         403,
         {

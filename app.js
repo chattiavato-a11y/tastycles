@@ -4,6 +4,7 @@ const sendBtn = document.getElementById("send-btn");
 const micBtn = document.getElementById("micBtn");
 const chatLog = document.getElementById("chat-log");
 const honeypotField = document.getElementById("website-field");
+const preHoneypotField = document.getElementById("contact-field");
 // --- OPS Asset Identity (Origin -> AssetId) ---
 const OPS_ASSET_BY_ORIGIN = {
   "https://www.gabos.io":
@@ -447,6 +448,7 @@ startIntroRotation();
 
 input.addEventListener("input", updateSendState);
 honeypotField?.addEventListener("input", updateSendState);
+preHoneypotField?.addEventListener("input", updateSendState);
 input.addEventListener("focus", () => {
   chatLog.scrollTop = chatLog.scrollHeight;
 });
@@ -497,6 +499,38 @@ const hasResidualMaliciousContent = (text) => {
     /document\.(cookie|write)/i,
   ];
   return checks.some((re) => re.test(String(text || "")));
+};
+
+
+const tinyMlHoneypotRiskScore = (value) => {
+  const sample = String(value || "").trim();
+  if (!sample) return 0;
+  let score = 0;
+  const rules = [
+    /https?:\/\//i,
+    /@/,
+    /\b(select|insert|union|drop|script|function|return|const|let|var)\b/i,
+    /[{}<>;=()]/,
+  ];
+  rules.forEach((rule) => {
+    if (rule.test(sample)) score += 2;
+  });
+  if (sample.length > 4) score += 2;
+  return score;
+};
+
+const isHoneypotCompromised = () => {
+  const postValue = String(honeypotField?.value || "").trim();
+  const preValue = String(preHoneypotField?.value || "").trim();
+  const postRisk = tinyMlHoneypotRiskScore(postValue);
+  const preRisk = tinyMlHoneypotRiskScore(preValue);
+  return {
+    blocked: Boolean(postValue || preValue || postRisk >= 2 || preRisk >= 2),
+    postValue,
+    preValue,
+    postRisk,
+    preRisk,
+  };
 };
 
 const sanitizeAndValidateMessage = (raw) => {
@@ -927,10 +961,15 @@ form.addEventListener("submit", async (event) => {
   const rawMessage = input.value.trim();
   if (!rawMessage || isStreaming) return;
 
-  const honeypotValue = String(honeypotField?.value || "").trim();
-  if (honeypotValue) {
-    console.warn("Blocked suspicious request: honeypot field filled.");
+  const honeypotCheck = isHoneypotCompromised();
+  if (honeypotCheck.blocked) {
+    console.warn("Blocked suspicious request: honeypot trap filled.", {
+      preRisk: honeypotCheck.preRisk,
+      postRisk: honeypotCheck.postRisk,
+    });
     input.value = "";
+    if (honeypotField) honeypotField.value = "";
+    if (preHoneypotField) preHoneypotField.value = "";
     updateSendState();
     setSecurityMessage("Security validation failed. Request blocked.");
     return;
