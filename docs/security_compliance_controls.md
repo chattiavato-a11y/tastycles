@@ -43,3 +43,7 @@ This document defines active controls and required controls for CSP, CORS, CORP,
 3. Verify SRI hashes in `index.html` match current file contents.
 4. Verify honeypot + Tiny ML blocking behavior in client and gateway.
 5. Record DNS, SEO, and compliance evidence snapshot.
+
+6. Run worker alignment guardrails:
+   - `python scripts/validate_worker_alignment.py`
+   - `python scripts/sync_root_worker_config.py` (if canonical config changed).

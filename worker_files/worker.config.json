@@ -1,32 +1,37 @@
 {
   "app_name": "gabo",
   "environment": "production",
-  "assistant_endpoint": "https://drastic-measures.rulathemtodos.workers.dev/api/chat",
+  "assetRegistry": "worker_files/worker.assets.json",
+  "workerScript": "worker_files/drastic-measures.gateway.js",
   "workerEndpoint": "https://drastic-measures.rulathemtodos.workers.dev",
-  "assistantEndpoint": "",
+  "assistantEndpoint": "https://drastic-measures.rulathemtodos.workers.dev/api/chat",
   "voiceEndpoint": "https://drastic-measures.rulathemtodos.workers.dev/api/voice",
   "ttsEndpoint": "https://drastic-measures.rulathemtodos.workers.dev/api/tts",
   "gatewayEndpoint": "https://drastic-measures.rulathemtodos.workers.dev",
   "workerEndpointAssetId": "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-  "gatewayEndpointAssetId": "",
+  "gatewayEndpointAssetId": "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
   "allowedOrigins": [
     "https://www.gabos.io",
     "https://gabos.io",
-    "https://chattiavato-a11y.github.io"
+    "https://chattiavato-a11y.github.io",
+    "https://drastic-measures.rulathemtodos.workers.dev"
   ],
   "allowedOriginAssetIds": [
     "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
     "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
-    "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756"
+    "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
+    "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945"
   ],
   "asset_identity": {
     "header_name": "x-ops-asset-id",
     "origin_to_asset_id": {
       "https://www.gabos.io": "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
       "https://gabos.io": "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
-      "https://chattiavato-a11y.github.io": "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756"
+      "https://chattiavato-a11y.github.io": "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
+      "https://drastic-measures.rulathemtodos.workers.dev": "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945"
     }
   },
+  "requiredHeaders": ["Content-Type", "Accept", "X-Ops-Asset-Id"],
   "headers": {
     "hop_header_name": "x-gabo-hop",
     "hop_header_value": "gateway",
@@ -35,7 +40,6 @@
       "list_header": "x-gabo-lang-list",
       "voice_language_header": "x-gabo-voice-language"
     },
-
     "optional_integrity_header": "x-ops-src-sha512-b64"
   },
   "routes": {
@@ -78,5 +82,7 @@
     ],
     "max_age_sec": 86400
   },
-  "notes": []
+  "notes": [
+    "Canonical config aligned to drastic-measures CF Worker gateway (HTML/CSS/JS frontend)."
+  ]
 }
