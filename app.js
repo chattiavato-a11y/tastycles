@@ -1,7 +1,9 @@
 const form = document.getElementById("chat-form");
 const input = document.getElementById("msgInput");
 const sendBtn = document.getElementById("send-btn");
+const micBtn = document.getElementById("micBtn");
 const chatLog = document.getElementById("chat-log");
+const honeypotField = document.getElementById("website-field");
 // --- OPS Asset Identity (Origin -> AssetId) ---
 const OPS_ASSET_BY_ORIGIN = {
   "https://www.gabos.io":
@@ -331,6 +333,7 @@ const voiceHelper = document.getElementById("voice-helper");
 const cancelBtn = document.getElementById("cancel-btn");
 const TURNSTILE_SITE_KEY = "0x4AAAAAACfBGVCLgKK_DToK";
 const TURNSTILE_HEADER_NAME = "cf-turnstile-response";
+const HONEYPOT_HEADER_NAME = "x-gabo-honeypot";
 let turnstileWidgetId = null;
 let turnstileToken = "";
 
@@ -348,6 +351,7 @@ const resetTurnstile = () => {
     }
   }
   turnstileToken = "";
+  updateSendState();
 };
 
 const initTurnstile = () => {
@@ -362,14 +366,17 @@ const initTurnstile = () => {
         callback: (token) => {
           turnstileToken = String(token || "");
           setTurnstileMessage("Security check passed.");
+          updateSendState();
         },
         "expired-callback": () => {
           turnstileToken = "";
           setTurnstileMessage("Security check expired. Please verify again.");
+          updateSendState();
         },
         "error-callback": () => {
           turnstileToken = "";
           setTurnstileMessage("Security check unavailable. Please retry.");
+          updateSendState();
         },
       });
     } catch (error) {
@@ -427,7 +434,16 @@ const logResponseMeta = (headers) => {
 };
 
 const updateSendState = () => {
-  sendBtn.disabled = isStreaming || input.value.trim().length === 0;
+  const hasText = input.value.trim().length > 0;
+  const hasTurnstile = turnstileToken.length > 0;
+  const honeypotTripped = Boolean(honeypotField?.value?.trim());
+  sendBtn.disabled = isStreaming || !hasText || !hasTurnstile || honeypotTripped;
+  if (input) {
+    input.readOnly = !hasTurnstile;
+  }
+  if (micBtn) {
+    micBtn.disabled = !hasTurnstile;
+  }
 };
 
 const updateCancelState = () => {
@@ -497,9 +513,72 @@ applyTranslations();
 startIntroRotation();
 
 input.addEventListener("input", updateSendState);
+honeypotField?.addEventListener("input", updateSendState);
 input.addEventListener("focus", () => {
   chatLog.scrollTop = chatLog.scrollHeight;
 });
+
+const TINY_ML_PATTERNS = [
+  { regex: /<\s*script\b/i, weight: 5 },
+  { regex: /<\/?\s*iframe\b/i, weight: 4 },
+  { regex: /javascript\s*:/i, weight: 4 },
+  { regex: /\bon\w+\s*=\s*["']/i, weight: 4 },
+  { regex: /\beval\s*\(/i, weight: 4 },
+  { regex: /document\.(cookie|write)/i, weight: 3 },
+  { regex: /localStorage|sessionStorage/i, weight: 2 },
+  { regex: /\b(function|class|import|export|return|const|let|var)\b\s+[a-zA-Z_$]/i, weight: 1 },
+  { regex: /[{};]{4,}/, weight: 1 },
+];
+
+const tinyMlRiskScore = (text) => {
+  const sample = String(text || "");
+  let score = 0;
+  TINY_ML_PATTERNS.forEach(({ regex, weight }) => {
+    if (regex.test(sample)) score += weight;
+  });
+  if (sample.length > 220) score += 1;
+  return score;
+};
+
+const sanitizeUserInput = (text) => {
+  let out = String(text || "");
+  out = out.replace(/\u0000/g, "");
+  out = out.replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ");
+  out = out.replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, " ");
+  out = out.replace(/<\s*(iframe|object|embed|style|form|svg|math)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, " ");
+  out = out.replace(/<[^>]+>/g, " ");
+  out = out.replace(/javascript\s*:/gi, "");
+  out = out.replace(/\bon\w+\s*=\s*["'][\s\S]*?["']/gi, "");
+  out = out.replace(/\bon\w+\s*=\s*[^\s>]+/gi, "");
+  out = out.replace(/\b(function|class|import|export|return|const|let|var)\b\s+[a-zA-Z_$][\w$]*/gi, " ");
+  out = out.replace(/\s+/g, " ").trim();
+  return out;
+};
+
+const hasResidualMaliciousContent = (text) => {
+  const checks = [
+    /<\s*script\b/i,
+    /javascript\s*:/i,
+    /\bon\w+\s*=/i,
+    /\beval\s*\(/i,
+    /document\.(cookie|write)/i,
+  ];
+  return checks.some((re) => re.test(String(text || "")));
+};
+
+const sanitizeAndValidateMessage = (raw) => {
+  const initialRisk = tinyMlRiskScore(raw);
+  const sanitized = sanitizeUserInput(raw);
+  const finalRisk = tinyMlRiskScore(sanitized);
+  const integrityOk = !hasResidualMaliciousContent(sanitized) && finalRisk <= 2;
+  return {
+    sanitized,
+    initialRisk,
+    finalRisk,
+    integrityOk,
+    changed: sanitized !== String(raw || "").trim(),
+  };
+};
 
 const addMessage = (text, isUser) => {
   const row = document.createElement("div");
@@ -557,7 +636,7 @@ function getSupportedMimeType() {
 }
 
 function setMicUI(isOn) {
-  const btn = document.getElementById("micBtn");
+  const btn = micBtn;
   if (!btn) return;
   btn.classList.toggle("is-listening", isOn);
   btn.setAttribute("aria-pressed", isOn ? "true" : "false");
@@ -738,7 +817,7 @@ async function onMicClick() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  const btn = document.getElementById("micBtn");
+  const btn = micBtn;
   if (!btn) return;
   const hasMediaSupport = Boolean(
     navigator.mediaDevices?.getUserMedia && window.MediaRecorder
@@ -821,6 +900,7 @@ const buildLanguageHeaders = (language) => {
 const buildSecurityHeaders = (language) => {
   const headers = {
     ...buildLanguageHeaders(language),
+    [HONEYPOT_HEADER_NAME]: String(honeypotField?.value || "").trim(),
   };
   if (turnstileToken) {
     headers[TURNSTILE_HEADER_NAME] = turnstileToken;
@@ -917,9 +997,34 @@ const warnIfOriginMissing = () => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const message = input.value.trim();
-  if (!message || isStreaming) return;
+  const rawMessage = input.value.trim();
+  if (!rawMessage || isStreaming) return;
 
+  const honeypotValue = String(honeypotField?.value || "").trim();
+  if (honeypotValue) {
+    console.warn("Blocked suspicious request: honeypot field filled.");
+    input.value = "";
+    updateSendState();
+    setTurnstileMessage("Security validation failed. Request blocked.");
+    return;
+  }
+
+  const sanitizedResult = sanitizeAndValidateMessage(rawMessage);
+  if (!sanitizedResult.sanitized || !sanitizedResult.integrityOk || sanitizedResult.initialRisk >= 8) {
+    input.value = "";
+    updateSendState();
+    addMessage("Message blocked by security sanitizer.", false);
+    return;
+  }
+
+  if (sanitizedResult.changed) {
+    console.info("Sanitizer updated outgoing message.", {
+      initialRisk: sanitizedResult.initialRisk,
+      finalRisk: sanitizedResult.finalRisk,
+    });
+  }
+
+  const message = sanitizedResult.sanitized;
   addMessage(message, true);
   input.value = "";
   updateSendState();
@@ -970,13 +1075,18 @@ form.addEventListener("submit", async (event) => {
           ...DEFAULT_REQUEST_META,
           ...getLanguageMeta(),
           voice_language: lastVoiceLanguage || undefined,
+          security: {
+            tiny_ml_risk: sanitizedResult.initialRisk,
+            tiny_ml_risk_post_sanitize: sanitizedResult.finalRisk,
+            integrity_check: sanitizedResult.integrityOk,
+            honeypot_clear: true,
+          },
+          honeypot: "",
         },
       },
       {
         signal: controller.signal,
-        extraHeaders: {
-          [TURNSTILE_HEADER_NAME]: turnstileToken,
-        },
+        extraHeaders: buildSecurityHeaders(getPreferredLanguage()),
       }
     );
 
@@ -1023,6 +1133,7 @@ const initApp = async () => {
   updateSendState();
   updateCancelState();
   stopThinking();
+  setTurnstileMessage("Complete security check to enable input.");
   initTurnstile();
 };
 

@@ -63,6 +63,18 @@
           aria-label="Type your message"
           required
         />
+        <label class="honeypot-field" for="website-field" aria-hidden="true">
+          Leave this field empty
+        </label>
+        <input
+          id="website-field"
+          class="honeypot-field"
+          type="text"
+          name="website"
+          tabindex="-1"
+          autocomplete="off"
+          aria-hidden="true"
+        />
         <span id="voice-helper" class="voice-helper" aria-live="polite"></span>
         <button id="micBtn" type="button" aria-label="Voice reply" aria-pressed="false">
           <svg class="voice-wave-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
