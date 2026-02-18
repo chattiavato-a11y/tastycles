@@ -1,256 +1,194 @@
-# Repository deep dive: how to move from **1/10** to **10/10**
+# Repository deep dive: what is wrong right now
 
-## Executive snapshot
+This document is an evidence-backed audit of the current repository state and the execution plan to stabilize it.
 
-Right now, this repo looks like a **prototype with production ambitions**. It has good ingredients (chat UI, Worker gateway, i18n, voice support), but lacks the delivery rigor, governance, and automation expected for a secure/reliable platform.
+## 1) The screenshot issue is real: DNS resolution is inconsistent
 
-If you want to go from a **1 (fragile)** to a **10 (best-in-class)**, you need to systematically improve six pillars:
+The screenshot shows `DNS_PROBE_FINISHED_NXDOMAIN` for `https://www.gabos.io`.
 
-1. Platform engineering (CI/CD + environments)
-2. Security/compliance controls (NIST/CISA/PCI-aligned)
-3. Product reliability/observability
-4. UX/HCI quality and accessibility
-5. AI/LLM safety + governance
-6. Documentation and operational runbooks
+Repository evidence:
+- `CNAME` points the site to `www.gabos.io`. If that hostname is missing/unstable in DNS, the entire site is unreachable.
 
----
+CLI evidence from this environment:
+- `dig +short www.gabos.io` and `nslookup www.gabos.io` return resolver-dependent answers in this environment.
 
-## Current scorecard (honest baseline)
+Interpretation:
+- You likely have split/propagation/cache inconsistency across resolvers.
+- That explains why one user/browser sees NXDOMAIN while others may resolve successfully.
 
-| Pillar | Current | Target | Gap summary |
-|---|---:|---:|---|
-| Architecture/config hygiene | 2/10 | 10/10 | Multiple config sources with drift and mixed schema conventions |
-| CI/CD + quality gates | 1/10 | 10/10 | No pipeline-enforced lint/test/security gates |
-| Security + compliance | 3/10 | 10/10 | Good intent in code headers, but incomplete operational controls and evidence trails |
-| Reliability + observability | 1/10 | 10/10 | No SLOs/alerts/dashboards/error budgets/instrumentation baselines |
-| UX/HCI + accessibility | 4/10 | 10/10 | Decent UI shell, but weak persistence, a11y validation, and deterministic localization UX |
-| AI/voice governance | 3/10 | 10/10 | Functional integration but no evaluation, policy controls, abuse/quality monitoring |
-| Mobile/Flutter readiness | 2/10 | 10/10 | Starter shell only; not integrated to production backend |
+## 2) Config and deployment source-of-truth is fragmented
 
----
+There are multiple configs with overlapping fields and conflicting values:
+- Root `worker.config.json` includes complete endpoints and workers.dev in allowed origins.
+- `worker_files/worker.config.json` uses mixed schema (`assistant_endpoint` + `assistantEndpoint`), includes empty fields, and diverges from root config.
 
-## What is wrong now (evidence-backed)
+Risk:
+- Different runtime paths can behave differently depending on which config file is loaded.
+- Incident triage becomes slow and error-prone.
 
-### 1) Config drift and duplicated sources of truth
-- Runtime behavior can diverge because endpoint/origin/asset-id settings exist in multiple places with conflicting values and conventions.
-- `worker_files/worker.config.json` differs from root `worker.config.json` and app defaults in `app.js`.
+## 3) Worker allowlists are inconsistent across files
 
-### 2) No quality gates means no reliability guarantee
-- There is no CI workflow to consistently run syntax, lint, tests, security scanning, or policy checks before merge/deploy.
+- `worker_files/gateway.worker.toml` allowlist differs from app/config expectations.
+- App + config + worker maps are not generated from one registry source.
 
-### 3) Gateway deployment config and source code can disagree
-- Worker TOML variables and in-code allowlists are not guaranteed to stay synchronized.
+Risk:
+- Legitimate clients can be blocked depending on which artifact is active.
 
-### 4) Security model needs stronger operational controls
-- Client-carried headers (asset IDs) are useful for routing/tagging but not strong identity.
-- Missing production-grade controls like explicit anti-abuse/rate limiting, signed requests, and evidence-producing compliance checks.
+## 4) Too many gateway variants create operational ambiguity
 
-### 5) UX/i18n behavior is not deterministic for user preference
-- Locale handling and rotating intro copy can conflict with stable user intent expectations.
+There are several worker gateway implementations in-tree:
+- `gateway.worker.js`
+- `drastic-measures.gateway.js`
+- `gateway.edge.worker.js`
+- `enlace.worker.js`
 
-### 6) Voice lifecycle and long-session hygiene need hardening
-- Audio URL lifecycle is partially managed and should be made leak-safe under interruptions/retries.
+`worker.config.json` and TOML can reference different artifacts.
 
-### 7) Strategy-to-implementation gap
-- The repo narrative is enterprise-grade, but delivery artifacts (governance dashboards, runbooks, measurable KPIs) are not yet in place.
+Risk:
+- Engineers can patch one file while production runs another.
+- Security and behavior drift becomes likely.
 
----
+## 5) UX behavior conflicts with deterministic user preference
 
-## The 1→10 upgrade plan (repair + fix + update)
+Intro copy auto-rotates languages every 30 seconds, regardless of explicit user choice/persistence.
 
-## Phase 0 (Days 1–3): Stop the bleeding — get to **3/10**
+Risk:
+- Unexpected language changes reduce trust and accessibility for assistive users.
+- QA and localization validation become non-deterministic.
 
-### Repair now
-1. **Unify config source**
-   - Pick one canonical file/schema (recommended: `worker_files/worker.config.json` + JSON schema).
-   - Remove duplicated fields and normalize naming (`assistantEndpoint`, not mixed snake_case/camelCase).
-   - Generate any secondary config artifacts from canonical source.
+## 6) Governance intent is stronger than executable controls
 
-2. **Lock environment matrix**
-   - Define `dev/stage/prod` with separate endpoint/origin/keys and release channels.
-   - Ban direct edits to production config outside PR.
+There is strong compliance/security intent in comments and metadata, but weak automation evidence in the repo snapshot.
 
-3. **Create minimum CI checks**
-   - JS syntax check
-   - JSON schema validation
-   - Basic linter
-   - Block merge on failure
-
-### Deliverables
-- `docs/config-contract.md`
-- `docs/environments.md`
-- `.github/workflows/ci.yml`
+Risk:
+- No automated guardrails to enforce schema parity, allowlist consistency, and regression checks before shipping.
 
 ---
 
-## Phase 1 (Week 1–2): Build reliability — get to **5/10**
+## Execution plan for the rest of the repo
 
-### Fix core engineering quality
-1. **Test pyramid foundation**
-   - Unit tests: parsers, config loaders, sanitization functions.
-   - Integration tests: `/api/chat`, `/api/voice`, `/api/tts` happy + failure paths.
-   - UI smoke (Playwright): open app, send message, verify streaming/cancel behavior.
+### Phase 0 (24–48h): Restore availability + unblock users
+1. Fix authoritative DNS for `www.gabos.io`; verify with multiple public resolvers and record evidence.
+2. Keep anti-bot control minimal but reliable (honeypot + origin/asset-id checks currently in place).
+3. Publish a short incident note + rollback path in docs.
 
-2. **Observability baseline**
-   - Structured logs with request IDs.
-   - Dashboard for: latency, 4xx/5xx, stream failures, STT/TTS error rates.
-   - Alerts on SLO breaches (availability and latency thresholds).
+### Phase 1 (Week 1): Canonical configuration
+1. Declare one canonical config (`worker_files/worker.config.json`) and remove duplicate/legacy keys.
+2. Generate root `worker.config.json` from canonical source (do not hand-edit both).
+3. Move origin + asset-id mapping to one registry artifact and import it from app + worker build steps.
 
-3. **Release discipline**
-   - Conventional commits or release notes automation.
-   - Tag and rollback process.
+### Phase 2 (Week 2): Worker consolidation
+1. Select one production gateway file and mark others as archived/reference.
+2. Align `gateway.worker.toml` vars with canonical allowlist and route map.
+3. Add smoke tests for `/api/chat`, `/api/voice`, and `/health`.
 
-### Deliverables
-- `tests/` (unit + integration)
-- `playwright/` smoke test
-- `docs/runbook-release.md`
-- `docs/runbook-incident.md`
+### Phase 3 (Week 3): UX + accessibility hardening
+1. Disable intro locale auto-rotation by default.
+2. Persist user language preference and expose explicit language selection.
+3. Run WCAG keyboard/focus/ARIA pass and add basic a11y lint checks.
 
----
+### Phase 4 (Week 4): DevSecOps guardrails
+1. Add CI gates: JSON schema validation, JS syntax/lint, and worker config parity check.
+2. Add dependency + secret scanning.
+3. Add release checklist: DNS verification, config parity, and endpoint smoke validation.
 
-## Phase 2 (Week 2–4): Security/compliance hardening — get to **7/10**
-
-### Update controls to match NIST/CISA/PCI intent
-1. **Identify (NIST/CISA)**
-   - Asset inventory: app, worker, secrets, domains, third parties.
-   - Threat model for chat + voice + edge gateway.
-
-2. **Protect**
-   - Secrets management policy + rotation cadence.
-   - Principle of least privilege for CI and cloud credentials.
-   - Add anti-abuse controls: rate limits, bot defense, anomaly thresholds.
-
-3. **Detect**
-   - Audit logging with retention policy (PCI Req.10 style evidence).
-   - Security event alerts (origin violations, suspicious payloads, repeated failures).
-
-4. **Respond/Recover**
-   - Incident response playbook with severity matrix, comms templates, and postmortem process.
-   - Recovery drills with MTTR tracking.
-
-### Deliverables
-- `docs/security-threat-model.md`
-- `docs/security-controls-matrix.md` (NIST/CISA/PCI mapping)
-- `docs/ir-plan.md`
+### Phase 5 (Ongoing): Observability + compliance evidence
+1. Define SLOs (availability, P95 latency, error rate).
+2. Emit structured logs with request ID + origin + route + status.
+3. Produce weekly control-evidence snapshots mapped to NIST/CISA/PCI objectives.
 
 ---
 
-## Phase 3 (Month 2): UX/HCI excellence + product trust — get to **8.5/10**
+## Additional findings (not yet fully remediated)
 
-### Improve human-centered quality
-1. **Localization UX correctness**
-   - Make language persistent and user-controlled.
-   - Disable auto-rotation by default or make it optional onboarding/demo mode.
+1. **Canonical SEO signals still hard-bind to `www`**
+   - `index.html` canonical and OG URL point to `https://www.gabos.io/`.
+   - If DNS remains inconsistent, crawlers and social previews inherit that instability.
 
-2. **Accessibility conformance**
-   - WCAG 2.1 AA audit for keyboard flows, focus states, contrast, SR labels, live regions.
-   - Add automated a11y checks in CI.
+2. **CORS policy is static and single-origin at edge headers**
+   - `_headers` allows one origin (`https://www.gabos.io`) while runtime allows multiple origins via worker logic.
+   - This mismatch can create surprising browser behavior across environments.
 
-3. **Performance targets (Core Web Vitals)**
-   - Define and enforce budget thresholds (LCP, CLS, INP/TTI).
-   - Add Lighthouse CI and regression alerts.
+3. **PWA/governance basics are incomplete**
+   - No `manifest.json`, no service worker registration, and no explicit offline strategy in current web root.
+   - This conflicts with the stated PWA/compliance direction.
 
-### Deliverables
-- `docs/ux-guidelines.md`
-- `docs/a11y-checklist.md`
-- `lighthouse-ci` config + reports
+4. **No environment contract artifacts**
+   - There is no dedicated `docs/environments.md` or machine-checked env matrix in this snapshot.
+   - Secrets/vars expected by workers are not centrally documented in-repo.
 
----
+5. **No explicit CI workflow checked into `.github/workflows/`**
+   - This prevents mandatory quality/security policy execution before deploy.
 
-## Phase 4 (Month 2–3): AI/LLM governance + mobile productionization — get to **9.5/10**
+6. **Language UX lacks explicit user control despite i18n catalog depth**
+   - The translation catalog is rich, but there is no visible locale selector and no persistence contract documented.
 
-### Upgrade AI platform integrity
-1. **Model governance**
-   - Define model tiers: quality/cost/latency fallback policy.
-   - Prompt/version registry and safe rollback for behavior regressions.
-
-2. **Safety & quality evals**
-   - Create eval suite for hallucination, toxicity, language fidelity, and policy compliance.
-   - Monitor STT/TTS quality by language and error rate.
-
-3. **Mobile integration**
-   - Wire Flutter app to same secure API contract.
-   - Add mobile telemetry and release gating.
-
-### Deliverables
-- `docs/ai-governance.md`
-- `evals/` test cases + baseline scores
-- Flutter API integration PRs
+7. **Security model currently leans on request-shape controls, not identity hardening**
+   - Honeypot + origin + asset-id + sanitizers are useful, but abuse resilience can be improved with robust edge rate limiting / challenge escalation.
 
 ---
 
-## Phase 5 (Quarterly maturity): Governance as code — reach **10/10**
+## Other solution options
 
-### Institutionalize excellence
-1. **Policy-as-code**
-   - Enforce config schema, security headers, dependency checks, and branch protections via CI policy gates.
+### Option A — Cloudflare-first hardening (recommended short path)
+- Keep static UI simple.
+- Put all trust decisions at worker edge:
+  - per-origin/token bucket rate limits,
+  - IP reputation thresholds,
+  - honeypot + content sanitizer + asset-id checks,
+  - optional managed challenge escalation for abusive fingerprints.
+- Benefits: lower client complexity, centralized controls, better auditability.
 
-2. **Compliance evidence automation**
-   - Generate machine-readable compliance artifacts each release.
-   - Maintain control ownership and audit trails.
+### Option B — GitHub Pages fallback + Worker as API only
+- Serve UI from GitHub Pages as public fallback.
+- Use custom domain only when DNS health checks pass.
+- Keep worker endpoints stable and domain-agnostic.
+- Benefits: improved continuity during DNS drift events.
 
-3. **Executive dashboard**
-   - One view: security posture, reliability SLO, UX quality, AI eval health, release risk.
+### Option C — Zero-trust signed client requests (higher rigor)
+- Issue short-lived signed tokens from worker for UI sessions.
+- Require signature + timestamp + nonce on chat/voice calls.
+- Add replay protection and strict skew checks.
+- Benefits: stronger request authenticity beyond origin/header assertions.
 
-### Deliverables
-- `governance/` policy rules
-- `compliance/` evidence snapshots
-- periodic maturity score updates
+### Option D — Config-as-code pipeline
+- Build a single canonical config schema.
+- Generate `worker.config.json`, TOML vars, and allowlist maps from one source file.
+- Fail CI when generated artifacts differ from committed outputs.
+- Benefits: eliminates drift class of incidents.
 
----
-
-## 30-60-90 day practical roadmap
-
-### First 30 days
-- Canonical config + schema
-- CI baseline
-- Unit/integration smoke tests
-- Observability MVP
-- Incident runbook
-
-### 60 days
-- Security controls matrix
-- Threat model complete
-- A11y + Lighthouse CI
-- Language preference persistence
-
-### 90 days
-- AI eval harness and policy gates
-- Flutter production backend integration
-- Quarterly governance dashboard + compliance evidence export
+### Option E — Observability-first rollout
+- Introduce route-level metrics and error taxonomy (`origin_blocked`, `asset_mismatch`, `sanitize_blocked`, `upstream_timeout`).
+- Add dashboards + alerts + weekly trend review.
+- Benefits: rapid triage and measurable reliability gains.
 
 ---
 
-## Priority implementation backlog (high ROI)
+## 14-day practical action plan
 
-1. Canonical config + generator scripts
-2. CI pipeline with required checks
-3. Worker/API integration tests
-4. Logging/metrics/alerts
-5. A11y and localization persistence
-6. Security matrix and incident process
-7. AI quality/safety eval framework
+### Days 1–2
+- Stabilize DNS and verify from multiple resolvers.
+- Publish temporary status page + known-issues communication.
 
----
+### Days 3–5
+- Unify config source and generate derived artifacts.
+- Remove/retire non-production gateway variants or clearly mark them.
 
-## Definition of Done for “10/10”
+### Days 6–9
+- Add CI workflow with syntax, schema, and config-parity checks.
+- Add edge rate limiting and abuse event logging.
 
-You are at 10/10 when:
-- Every merge is policy-checked, tested, and traceable.
-- Every deploy is observable, rollback-safe, and auditable.
-- Security controls are measurable and mapped to frameworks.
-- UX is accessible, fast, and localization-stable by design.
-- AI behavior is evaluated, versioned, and governed.
-- Documentation is operational, not aspirational.
+### Days 10–14
+- Implement locale selector + persistence.
+- Define SLOs and wire first alerts (availability, 5xx, latency).
+- Produce first governance evidence snapshot for security/legal review.
 
 ---
 
-## Suggested ownership model
+## Remediation updates implemented in this revision
 
-- **Platform Owner:** CI/CD, environments, release safety
-- **Security Owner:** controls, threat model, incident readiness
-- **Product/UX Owner:** accessibility, localization, user trust
-- **AI Owner:** evals, policy controls, model lifecycle
-- **Ops Owner:** observability, SLOs, incident response
-
-This keeps accountability clear and prevents “everyone owns it, so no one owns it” failure.
+- Added dual honeypot traps (before entry and before action buttons) with Tiny ML risk scoring in client and gateway.
+- Added SRI integrity attributes to local CSS/JS assets in `index.html`.
+- Updated `_headers` with explicit CORP + Referrer-Policy + HSTS + X-Frame-Options + X-Content-Type-Options + CSP + CORS headers.
+- Updated worker and config allow-headers to include dual honeypot headers.
+- Added `docs/security_compliance_controls.md` with NIST, CISA, PCI DSS, OWASP, CSP, CORS, SEO/GSC control mapping.

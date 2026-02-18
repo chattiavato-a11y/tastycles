@@ -4,6 +4,7 @@ const sendBtn = document.getElementById("send-btn");
 const micBtn = document.getElementById("micBtn");
 const chatLog = document.getElementById("chat-log");
 const honeypotField = document.getElementById("website-field");
+const preHoneypotField = document.getElementById("contact-field");
 // --- OPS Asset Identity (Origin -> AssetId) ---
 const OPS_ASSET_BY_ORIGIN = {
   "https://www.gabos.io":
@@ -331,77 +332,12 @@ const isOriginAllowed = (origin, allowedList) => {
 const thinkingStatus = document.getElementById("thinking-status");
 const voiceHelper = document.getElementById("voice-helper");
 const cancelBtn = document.getElementById("cancel-btn");
-const TURNSTILE_SITE_KEY = "0x4AAAAAACfBGVCLgKK_DToK";
-const TURNSTILE_HEADER_NAME = "cf-turnstile-response";
 const HONEYPOT_HEADER_NAME = "x-gabo-honeypot";
-let turnstileWidgetId = null;
-let turnstileToken = "";
+const PRE_HONEYPOT_HEADER_NAME = "x-gabo-honeypot-pre";
 
-const setTurnstileMessage = (text) => {
+const setSecurityMessage = (text) => {
   if (!voiceHelper) return;
   voiceHelper.textContent = text || "";
-};
-
-const resetTurnstile = () => {
-  if (window.turnstile && turnstileWidgetId !== null) {
-    try {
-      window.turnstile.reset(turnstileWidgetId);
-    } catch (error) {
-      console.warn("Unable to reset Turnstile widget.", error);
-    }
-  }
-  turnstileToken = "";
-  updateSendState();
-};
-
-const initTurnstile = () => {
-  const container = document.getElementById("turnstile-widget");
-  if (!container) return;
-
-  const renderWidget = () => {
-    if (!window.turnstile || turnstileWidgetId !== null) return;
-    try {
-      turnstileWidgetId = window.turnstile.render(container, {
-        sitekey: TURNSTILE_SITE_KEY,
-        callback: (token) => {
-          turnstileToken = String(token || "");
-          setTurnstileMessage("Security check passed.");
-          updateSendState();
-        },
-        "expired-callback": () => {
-          turnstileToken = "";
-          setTurnstileMessage("Security check expired. Please verify again.");
-          updateSendState();
-        },
-        "error-callback": () => {
-          turnstileToken = "";
-          setTurnstileMessage("Security check unavailable. Please retry.");
-          updateSendState();
-        },
-      });
-    } catch (error) {
-      console.error("Turnstile render failed:", error);
-      setTurnstileMessage("Security check unavailable.");
-    }
-  };
-
-  if (window.turnstile) {
-    renderWidget();
-    return;
-  }
-
-  const start = Date.now();
-  const interval = window.setInterval(() => {
-    if (window.turnstile) {
-      window.clearInterval(interval);
-      renderWidget();
-      return;
-    }
-    if (Date.now() - start > 10000) {
-      window.clearInterval(interval);
-      setTurnstileMessage("Security check unavailable. Refresh and try again.");
-    }
-  }, 150);
 };
 
 const thinkingFrames = ["Thinking.", "Thinking..", "Thinking...", "Thinking...."];
@@ -435,14 +371,14 @@ const logResponseMeta = (headers) => {
 
 const updateSendState = () => {
   const hasText = input.value.trim().length > 0;
-  const hasTurnstile = turnstileToken.length > 0;
-  const honeypotTripped = Boolean(honeypotField?.value?.trim());
-  sendBtn.disabled = isStreaming || !hasText || !hasTurnstile || honeypotTripped;
+  const postHoneypotTripped = Boolean(honeypotField?.value?.trim());
+  const preHoneypotTripped = Boolean(preHoneypotField?.value?.trim());
+  sendBtn.disabled = isStreaming || !hasText || postHoneypotTripped || preHoneypotTripped;
   if (input) {
-    input.readOnly = !hasTurnstile;
+    input.readOnly = false;
   }
   if (micBtn) {
-    micBtn.disabled = !hasTurnstile;
+    micBtn.disabled = false;
   }
 };
 
@@ -514,6 +450,7 @@ startIntroRotation();
 
 input.addEventListener("input", updateSendState);
 honeypotField?.addEventListener("input", updateSendState);
+preHoneypotField?.addEventListener("input", updateSendState);
 input.addEventListener("focus", () => {
   chatLog.scrollTop = chatLog.scrollHeight;
 });
@@ -564,6 +501,38 @@ const hasResidualMaliciousContent = (text) => {
     /document\.(cookie|write)/i,
   ];
   return checks.some((re) => re.test(String(text || "")));
+};
+
+
+const tinyMlHoneypotRiskScore = (value) => {
+  const sample = String(value || "").trim();
+  if (!sample) return 0;
+  let score = 0;
+  const rules = [
+    /https?:\/\//i,
+    /@/,
+    /\b(select|insert|union|drop|script|function|return|const|let|var)\b/i,
+    /[{}<>;=()]/,
+  ];
+  rules.forEach((rule) => {
+    if (rule.test(sample)) score += 2;
+  });
+  if (sample.length > 4) score += 2;
+  return score;
+};
+
+const isHoneypotCompromised = () => {
+  const postValue = String(honeypotField?.value || "").trim();
+  const preValue = String(preHoneypotField?.value || "").trim();
+  const postRisk = tinyMlHoneypotRiskScore(postValue);
+  const preRisk = tinyMlHoneypotRiskScore(preValue);
+  return {
+    blocked: Boolean(postValue || preValue || postRisk >= 2 || preRisk >= 2),
+    postValue,
+    preValue,
+    postRisk,
+    preRisk,
+  };
 };
 
 const sanitizeAndValidateMessage = (raw) => {
@@ -897,16 +866,11 @@ const buildLanguageHeaders = (language) => {
   };
 };
 
-const buildSecurityHeaders = (language) => {
-  const headers = {
-    ...buildLanguageHeaders(language),
-    [HONEYPOT_HEADER_NAME]: String(honeypotField?.value || "").trim(),
-  };
-  if (turnstileToken) {
-    headers[TURNSTILE_HEADER_NAME] = turnstileToken;
-  }
-  return headers;
-};
+const buildSecurityHeaders = (language) => ({
+  ...buildLanguageHeaders(language),
+  [HONEYPOT_HEADER_NAME]: String(honeypotField?.value || "").trim(),
+  [PRE_HONEYPOT_HEADER_NAME]: String(preHoneypotField?.value || "").trim(),
+});
 
 const streamWorkerResponse = async (response, bubble) => {
   if (!response.body) {
@@ -1000,12 +964,17 @@ form.addEventListener("submit", async (event) => {
   const rawMessage = input.value.trim();
   if (!rawMessage || isStreaming) return;
 
-  const honeypotValue = String(honeypotField?.value || "").trim();
-  if (honeypotValue) {
-    console.warn("Blocked suspicious request: honeypot field filled.");
+  const honeypotCheck = isHoneypotCompromised();
+  if (honeypotCheck.blocked) {
+    console.warn("Blocked suspicious request: honeypot trap filled.", {
+      preRisk: honeypotCheck.preRisk,
+      postRisk: honeypotCheck.postRisk,
+    });
     input.value = "";
+    if (honeypotField) honeypotField.value = "";
+    if (preHoneypotField) preHoneypotField.value = "";
     updateSendState();
-    setTurnstileMessage("Security validation failed. Request blocked.");
+    setSecurityMessage("Security validation failed. Request blocked.");
     return;
   }
 
@@ -1054,13 +1023,6 @@ form.addEventListener("submit", async (event) => {
       }
     } catch (error) {
       assistantBubble.textContent = String(error?.message || error);
-      stopThinking();
-      return;
-    }
-
-    if (!turnstileToken) {
-      assistantBubble.textContent =
-        "Please complete the security check before sending a message.";
       stopThinking();
       return;
     }
@@ -1123,7 +1085,6 @@ form.addEventListener("submit", async (event) => {
     setStreamingState(false);
     stopThinking();
     voiceReplyRequested = false;
-    resetTurnstile();
   }
 });
 
@@ -1133,8 +1094,7 @@ const initApp = async () => {
   updateSendState();
   updateCancelState();
   stopThinking();
-  setTurnstileMessage("Complete security check to enable input.");
-  initTurnstile();
+  setSecurityMessage("Security checks active (honeypot + gateway validation).");
 };
 
 initApp();
