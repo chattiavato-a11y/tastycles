@@ -42,7 +42,6 @@
       "voice_language_header": "x-gabo-voice-language"
     },
 
-    "turnstile_header": "cf-turnstile-response",
     "optional_integrity_header": "x-ops-src-sha512-b64"
   },
 
@@ -71,7 +70,6 @@
       "accept",
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
-      "cf-turnstile-response",
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
       "x-gabo-voice-language"

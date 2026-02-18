@@ -140,7 +140,6 @@ function corsHeaders(origin) {
       "accept",
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
-      "cf-turnstile-response",
       "x-gabo-origin",
       // repo parity: UI language hints
       "x-gabo-lang-hint",

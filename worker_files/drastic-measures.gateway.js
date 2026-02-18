@@ -209,7 +209,6 @@ function corsHeaders(origin) {
       "accept",
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
-      "cf-turnstile-response",
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
       "x-gabo-voice-language",
@@ -551,54 +550,6 @@ function expectedAssetIdForOrigin(origin) {
   return ORIGIN_ASSET_ID.get(origin) || "";
 }
 
-function getTurnstileToken(request) {
-  return safeTextOnly(request.headers.get("cf-turnstile-response") || "");
-}
-
-async function verifyTurnstileToken(env, request, token) {
-  const secret = safeTextOnly(env?.TURNSTILE || "");
-  if (!secret) {
-    return { ok: false, reason: "Turnstile secret is not configured" };
-  }
-  if (!token) {
-    return { ok: false, reason: "Missing Turnstile token" };
-  }
-
-  const ip = safeTextOnly(request.headers.get("cf-connecting-ip") || "");
-  const form = new URLSearchParams();
-  form.set("secret", secret);
-  form.set("response", token);
-  if (ip) form.set("remoteip", ip);
-
-  let response;
-  try {
-    response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: form.toString(),
-    });
-  } catch {
-    return { ok: false, reason: "Turnstile verification request failed" };
-  }
-
-  if (!response.ok) {
-    return { ok: false, reason: `Turnstile verification failed (${response.status})` };
-  }
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    return { ok: false, reason: "Turnstile verification returned invalid JSON" };
-  }
-
-  if (!payload?.success) {
-    const codes = Array.isArray(payload?.["error-codes"]) ? payload["error-codes"].join(",") : "invalid-token";
-    return { ok: false, reason: `Turnstile rejected token (${codes})` };
-  }
-
-  return { ok: true };
-}
 
 function verifyAssetIdentity(origin, request) {
   const got = safeTextOnly(request.headers.get("x-ops-asset-id") || "");
@@ -1021,19 +972,6 @@ export default {
         {
           error: "Blocked by honeypot",
           detail: "Automated submission detected.",
-        },
-        baseExtra
-      );
-    }
-
-    const turnstileToken = getTurnstileToken(request);
-    const turnstile = await verifyTurnstileToken(env, request, turnstileToken);
-    if (!turnstile.ok) {
-      return json(
-        403,
-        {
-          error: "Turnstile verification failed",
-          detail: turnstile.reason,
         },
         baseExtra
       );
