@@ -213,6 +213,7 @@ function corsHeaders(origin) {
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
       "x-gabo-voice-language",
+      "x-gabo-honeypot",
       // optional forward hint if you ever want it:
       "x-gabo-origin",
     ].join(", ")
@@ -334,6 +335,50 @@ function looksMalicious(text) {
 function sanitizeContent(text) {
   const cleaned = stripDangerousMarkup(safeTextOnly(text));
   return safeTextOnly(cleaned);
+}
+
+const TINY_ML_SIGNAL_RULES = [
+  { re: /<\s*script\b/i, score: 6 },
+  { re: /javascript\s*:/i, score: 5 },
+  { re: /\bon\w+\s*=\s*["']/i, score: 4 },
+  { re: /\beval\s*\(/i, score: 4 },
+  { re: /document\.(cookie|write)/i, score: 3 },
+  { re: /\b(function|class|import|export|return|const|let|var)\b\s+[a-zA-Z_$]/i, score: 2 },
+  { re: /[{};]{5,}/, score: 1 },
+];
+
+function tinyMlRiskScore(text) {
+  const t = String(text || "");
+  let score = 0;
+  for (const rule of TINY_ML_SIGNAL_RULES) {
+    if (rule.re.test(t)) score += rule.score;
+  }
+  if (t.length > 240) score += 1;
+  return score;
+}
+
+function hasResidualRisk(text) {
+  const checks = [
+    /<\s*script\b/i,
+    /javascript\s*:/i,
+    /\bon\w+\s*=/i,
+    /\beval\s*\(/i,
+    /document\.(cookie|write)/i,
+  ];
+  return checks.some((re) => re.test(String(text || "")));
+}
+
+function sanitizeWithIntegrity(text) {
+  const before = String(text || "");
+  const beforeRisk = tinyMlRiskScore(before);
+  const after = sanitizeContent(before);
+  const afterRisk = tinyMlRiskScore(after);
+  const integrityOk = !hasResidualRisk(after) && afterRisk <= 2;
+  return { beforeRisk, afterRisk, text: after, integrityOk };
+}
+
+function getHoneypotValue(request) {
+  return safeTextOnly(request.headers.get("x-gabo-honeypot") || "");
 }
 
 function normalizeMessages(input) {
@@ -504,6 +549,55 @@ function sanitizeMeta(metaIn) {
 // -------------------------
 function expectedAssetIdForOrigin(origin) {
   return ORIGIN_ASSET_ID.get(origin) || "";
+}
+
+function getTurnstileToken(request) {
+  return safeTextOnly(request.headers.get("cf-turnstile-response") || "");
+}
+
+async function verifyTurnstileToken(env, request, token) {
+  const secret = safeTextOnly(env?.TURNSTILE || "");
+  if (!secret) {
+    return { ok: false, reason: "Turnstile secret is not configured" };
+  }
+  if (!token) {
+    return { ok: false, reason: "Missing Turnstile token" };
+  }
+
+  const ip = safeTextOnly(request.headers.get("cf-connecting-ip") || "");
+  const form = new URLSearchParams();
+  form.set("secret", secret);
+  form.set("response", token);
+  if (ip) form.set("remoteip", ip);
+
+  let response;
+  try {
+    response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+  } catch {
+    return { ok: false, reason: "Turnstile verification request failed" };
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: `Turnstile verification failed (${response.status})` };
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return { ok: false, reason: "Turnstile verification returned invalid JSON" };
+  }
+
+  if (!payload?.success) {
+    const codes = Array.isArray(payload?.["error-codes"]) ? payload["error-codes"].join(",") : "invalid-token";
+    return { ok: false, reason: `Turnstile rejected token (${codes})` };
+  }
+
+  return { ok: true };
 }
 
 function verifyAssetIdentity(origin, request) {
@@ -920,6 +1014,31 @@ export default {
     const baseExtra = corsHeaders(corsOrigin);
     baseExtra.set("x-gabo-asset-verified", "1");
 
+    const honeypotValue = getHoneypotValue(request);
+    if (honeypotValue) {
+      return json(
+        403,
+        {
+          error: "Blocked by honeypot",
+          detail: "Automated submission detected.",
+        },
+        baseExtra
+      );
+    }
+
+    const turnstileToken = getTurnstileToken(request);
+    const turnstile = await verifyTurnstileToken(env, request, turnstileToken);
+    if (!turnstile.ok) {
+      return json(
+        403,
+        {
+          error: "Turnstile verification failed",
+          detail: turnstile.reason,
+        },
+        baseExtra
+      );
+    }
+
     // -----------------------
     // /api/chat
     // -----------------------
@@ -939,7 +1058,15 @@ export default {
       const metaSafe = sanitizeMeta(body.meta);
 
       const lastUser = lastUserText(messages);
-      const allowAuthor = wantsAuthorDisclosure(lastUser);
+      const tinyMlCheck = sanitizeWithIntegrity(lastUser);
+      if (!tinyMlCheck.text || !tinyMlCheck.integrityOk || tinyMlCheck.beforeRisk >= 8) {
+        return json(403, { error: "Blocked by tiny-ml sanitizer", detail: "Message failed integrity checks" }, baseExtra);
+      }
+      if (tinyMlCheck.text !== lastUser) {
+        const lastIdx = messages.map((m) => m.role).lastIndexOf("user");
+        if (lastIdx >= 0) messages[lastIdx] = { ...messages[lastIdx], content: tinyMlCheck.text };
+      }
+      const allowAuthor = wantsAuthorDisclosure(tinyMlCheck.text);
 
       // Model non-disclosure rule
       if (wantsModelDisclosure(lastUser)) {
@@ -992,9 +1119,12 @@ export default {
       let body;
       try { body = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON" }, baseExtra); }
 
-      const text = sanitizeContent(body?.text || "");
+      const tinyMlTts = sanitizeWithIntegrity(body?.text || "");
+      const text = tinyMlTts.text;
       if (!text) return json(400, { error: "text required" }, baseExtra);
-      if (looksMalicious(text)) return json(403, { error: "Blocked by security sanitizer" }, baseExtra);
+      if (!tinyMlTts.integrityOk || tinyMlTts.beforeRisk >= 8 || looksMalicious(text)) {
+        return json(403, { error: "Blocked by security sanitizer" }, baseExtra);
+      }
 
       const langIso2 = normalizeIso2(body?.lang_iso2 || "en") || "en";
 
@@ -1085,9 +1215,12 @@ export default {
       }
 
       const transcriptRaw = sttOut?.text || sttOut?.result?.text || sttOut?.response?.text || "";
-      const transcript = sanitizeContent(transcriptRaw);
+      const tinyMlTranscript = sanitizeWithIntegrity(transcriptRaw);
+      const transcript = tinyMlTranscript.text;
       if (!transcript) return json(400, { error: "No transcription produced" }, baseExtra);
-      if (looksMalicious(transcript)) return json(403, { error: "Blocked by security sanitizer" }, baseExtra);
+      if (!tinyMlTranscript.integrityOk || tinyMlTranscript.beforeRisk >= 8 || looksMalicious(transcript)) {
+        return json(403, { error: "Blocked by security sanitizer" }, baseExtra);
+      }
 
       const allowAuthor = wantsAuthorDisclosure(transcript);
 
