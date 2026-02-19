@@ -198,6 +198,8 @@
     try {
       const u = new URL(String(targetUrl), window.location.origin);
       const targetOrigin = u.origin.toLowerCase();
+      const currentOrigin = normalizeOrigin(window.location.origin);
+      if (targetOrigin === currentOrigin) return true;
       const allowed = Array.isArray(config.allowedOrigins) ? config.allowedOrigins : [];
       return allowed.some((o) => normalizeOrigin(o) === targetOrigin);
     } catch {
@@ -282,10 +284,22 @@
     return h;
   };
 
+  const applyOptionalIntegrityHeader = (headers, config) => {
+    const fromHeader = safeText(headers.get("x-ops-src-sha512-b64") || "");
+    if (fromHeader) return;
+
+    const windowCandidate = safeText(window.OPS_SRC_SHA512_B64 || window.__OPS_SRC_SHA512_B64__ || "");
+    if (!windowCandidate) return;
+
+    const integrityHeader = safeText(config?.headers?.optional_integrity_header || "x-ops-src-sha512-b64").toLowerCase();
+    headers.set(integrityHeader, windowCandidate);
+  };
+
   // -------------------------
   // API calls
   // -------------------------
   const postChat = async (payload, opts) => {
+    await init();
     const config = STATE.config;
     const endpoint = safeText(config.assistantEndpoint) || `${config.gatewayEndpoint}${config.routes.chat || "/api/chat"}`;
 
@@ -300,6 +314,7 @@
     const extraHeaders = opts?.extraHeaders || {};
 
     const headers = buildBaseHeaders(extraHeaders, config);
+    applyOptionalIntegrityHeader(headers, config);
 
     // enforce request size limits (best-effort)
     const bodyText = JSON.stringify(payload ?? {});
@@ -323,6 +338,7 @@
   };
 
   const postVoiceSTT = async (audioBlob, opts) => {
+    await init();
     const config = STATE.config;
     const base = safeText(config.voiceEndpoint) || `${config.gatewayEndpoint}${config.routes.voice || "/api/voice"}`;
     const endpoint = `${base}?mode=stt`;
@@ -353,6 +369,7 @@
     if (extraHeaders && typeof extraHeaders === "object") {
       for (const [k, v] of Object.entries(extraHeaders)) headers.set(String(k), String(v ?? ""));
     }
+    applyOptionalIntegrityHeader(headers, config);
 
     // Size hint check (best-effort)
     const maxBytes = Number(config?.limits?.max_audio_bytes || 12 * 1024 * 1024);
@@ -375,6 +392,7 @@
   };
 
   const postTTS = async (input, opts) => {
+    await init();
     const config = STATE.config;
     const endpoint = safeText(config.ttsEndpoint) || `${config.gatewayEndpoint}${config.routes.tts || "/api/tts"}`;
 
@@ -410,6 +428,7 @@
     if (extraHeaders && typeof extraHeaders === "object") {
       for (const [k, v] of Object.entries(extraHeaders)) headers.set(String(k), String(v ?? ""));
     }
+    applyOptionalIntegrityHeader(headers, config);
 
     return fetch(endpoint, {
       method: "POST",
