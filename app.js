@@ -17,6 +17,25 @@ const HONEYPOT_PRE_HEADER_NAME = "x-gabo-honeypot-pre";
 const HONEYPOT_DYNAMIC_ATTR = "data-gabo-honeypot";
 const HONEYPOT_DYNAMIC_VALUE_ATTR = "data-gabo-honeypot-value";
 
+const hideHoneypotField = (field) => {
+  if (!field) return;
+  field.setAttribute("aria-hidden", "true");
+  field.setAttribute("tabindex", "-1");
+  field.setAttribute("autocomplete", "off");
+  field.style.position = "absolute";
+  field.style.left = "-9999px";
+  field.style.width = "1px";
+  field.style.height = "1px";
+  field.style.margin = "0";
+  field.style.padding = "0";
+  field.style.border = "0";
+  field.style.opacity = "0";
+  field.style.pointerEvents = "none";
+  field.style.clipPath = "inset(50%)";
+  field.style.overflow = "hidden";
+  field.style.whiteSpace = "nowrap";
+};
+
 // -------------------------
 // Canonical runtime config (single source of truth)
 // -------------------------
@@ -375,6 +394,8 @@ const rotateBackgroundGradient = () => {
 rotateBackgroundGradient();
 applyTranslations();
 startIntroRotation();
+hideHoneypotField(honeypotField);
+hideHoneypotField(preHoneypotField);
 
 // -------------------------
 // Streaming state + thinking UI
@@ -411,16 +432,10 @@ const installDynamicHoneypots = () => {
 
     const hp = document.createElement("input");
     hp.type = "text";
-    hp.autocomplete = "off";
-    hp.tabIndex = -1;
-    hp.setAttribute("aria-hidden", "true");
     hp.setAttribute(HONEYPOT_DYNAMIC_ATTR, "1");
     hp.setAttribute(HONEYPOT_DYNAMIC_VALUE_ATTR, `${tag}-${index}`);
     hp.className = "gabo-honeypot-field";
-    hp.style.position = "absolute";
-    hp.style.left = "-9999px";
-    hp.style.opacity = "0";
-    hp.style.pointerEvents = "none";
+    hideHoneypotField(hp);
 
     control.parentElement.insertBefore(hp, control);
     registerDynamicHoneypotField(hp);
@@ -1198,7 +1213,7 @@ const initApp = async () => {
   if (!OPS_ASSET_ID) {
     setSecurityMessage("Security checks active, but asset identity mapping is missing for this origin.");
   } else {
-    setSecurityMessage("Security checks active (honeypot + gateway validation + asset identity).");
+    setSecurityMessage("Security checks active (gateway validation + asset identity).");
   }
 };
 
