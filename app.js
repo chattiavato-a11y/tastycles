@@ -11,8 +11,6 @@ const thinkingStatus = document.getElementById("thinking-status");
 const voiceHelper = document.getElementById("voice-helper");
 const cancelBtn = document.getElementById("cancel-btn");
 
-const HONEYPOT_HEADER_NAME = "x-gabo-honeypot";
-const HONEYPOT_PRE_HEADER_NAME = "x-gabo-honeypot-pre";
 
 const HONEYPOT_DYNAMIC_ATTR = "data-gabo-honeypot";
 const HONEYPOT_DYNAMIC_VALUE_ATTR = "data-gabo-honeypot-value";
@@ -754,8 +752,7 @@ const buildLanguageHeaders = (language) => {
 
 const getAssetHeaderName = () => normalizeHeaderName(window.OPS_ASSET_HEADER_NAME || CANONICAL_CONFIG?.asset_identity?.header_name || "x-ops-asset-id");
 
-const buildSecurityHeaders = (language, integrityB64 = "") => {
-  const assetHeaderName = getAssetHeaderName();
+const buildHoneypotTelemetry = () => {
   const dynamicPayload = Array.from(dynamicHoneypotFields)
     .map((field) => ({
       key: String(field?.getAttribute(HONEYPOT_DYNAMIC_VALUE_ATTR) || "").trim(),
@@ -763,11 +760,17 @@ const buildSecurityHeaders = (language, integrityB64 = "") => {
     }))
     .filter(({ value }) => Boolean(value));
 
+  return {
+    honeypot: String(honeypotField?.value || "").trim(),
+    pre_honeypot: String(preHoneypotField?.value || "").trim(),
+    dynamic: dynamicPayload,
+  };
+};
+
+const buildSecurityHeaders = (language, integrityB64 = "") => {
+  const assetHeaderName = getAssetHeaderName();
   const headers = {
     ...buildLanguageHeaders(language),
-    [HONEYPOT_HEADER_NAME]: String(honeypotField?.value || "").trim(),
-    [HONEYPOT_PRE_HEADER_NAME]: String(preHoneypotField?.value || "").trim(),
-    "x-gabo-honeypot-dynamic": dynamicPayload.length ? JSON.stringify(dynamicPayload).slice(0, 1024) : "",
     "x-ops-src-sha512-b64": integrityB64,
   };
 
@@ -1171,7 +1174,7 @@ form.addEventListener("submit", async (event) => {
             integrity_sha512_b64: integrityB64 || undefined,
             honeypot_clear: true,
           },
-          honeypot: "",
+          honeypot: buildHoneypotTelemetry(),
         },
       },
       {
