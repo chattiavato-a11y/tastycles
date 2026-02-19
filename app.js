@@ -5,6 +5,7 @@ const micBtn = document.getElementById("micBtn");
 const chatLog = document.getElementById("chat-log");
 const honeypotField = document.getElementById("website-field");
 const preHoneypotField = document.getElementById("contact-field");
+const dynamicHoneypotFields = new Set();
 
 const thinkingStatus = document.getElementById("thinking-status");
 const voiceHelper = document.getElementById("voice-helper");
@@ -12,6 +13,9 @@ const cancelBtn = document.getElementById("cancel-btn");
 
 const HONEYPOT_HEADER_NAME = "x-gabo-honeypot";
 const HONEYPOT_PRE_HEADER_NAME = "x-gabo-honeypot-pre";
+
+const HONEYPOT_DYNAMIC_ATTR = "data-gabo-honeypot";
+const HONEYPOT_DYNAMIC_VALUE_ATTR = "data-gabo-honeypot-value";
 
 // -------------------------
 // Canonical runtime config (single source of truth)
@@ -389,6 +393,40 @@ const setSecurityMessage = (text) => {
   voiceHelper.textContent = text || "";
 };
 
+const registerDynamicHoneypotField = (field) => {
+  if (!field) return;
+  dynamicHoneypotFields.add(field);
+  field.addEventListener("input", updateSendState);
+};
+
+const installDynamicHoneypots = () => {
+  const controls = document.querySelectorAll("input, textarea, button");
+  controls.forEach((control, index) => {
+    if (!control || !control.parentElement) return;
+
+    const tag = String(control.tagName || "").toLowerCase();
+    const type = String(control.getAttribute("type") || "").toLowerCase();
+    if (control.matches(`[${HONEYPOT_DYNAMIC_ATTR}]`) || control.id === "website-field" || control.id === "contact-field") return;
+    if (tag === "input" && ["hidden", "submit", "button", "image", "file", "checkbox", "radio", "range", "color"].includes(type)) return;
+
+    const hp = document.createElement("input");
+    hp.type = "text";
+    hp.autocomplete = "off";
+    hp.tabIndex = -1;
+    hp.setAttribute("aria-hidden", "true");
+    hp.setAttribute(HONEYPOT_DYNAMIC_ATTR, "1");
+    hp.setAttribute(HONEYPOT_DYNAMIC_VALUE_ATTR, `${tag}-${index}`);
+    hp.className = "gabo-honeypot-field";
+    hp.style.position = "absolute";
+    hp.style.left = "-9999px";
+    hp.style.opacity = "0";
+    hp.style.pointerEvents = "none";
+
+    control.parentElement.insertBefore(hp, control);
+    registerDynamicHoneypotField(hp);
+  });
+};
+
 const updateThinkingText = () => {
   const text = thinkingFrames[thinkingIndex % thinkingFrames.length];
   thinkingIndex += 1;
@@ -518,12 +556,24 @@ const isHoneypotCompromised = () => {
   const preValue = String(preHoneypotField?.value || "").trim();
   const postRisk = tinyMlHoneypotRiskScore(postValue);
   const preRisk = tinyMlHoneypotRiskScore(preValue);
+
+  const dynamicValues = Array.from(dynamicHoneypotFields)
+    .map((field) => ({
+      key: String(field?.getAttribute(HONEYPOT_DYNAMIC_VALUE_ATTR) || "").trim(),
+      value: String(field?.value || "").trim(),
+    }))
+    .filter(({ value }) => Boolean(value));
+
+  const dynamicRisk = dynamicValues.reduce((sum, entry) => sum + tinyMlHoneypotRiskScore(entry.value), 0);
+
   return {
-    blocked: Boolean(postValue || preValue || postRisk >= 2 || preRisk >= 2),
+    blocked: Boolean(postValue || preValue || dynamicValues.length || postRisk >= 2 || preRisk >= 2 || dynamicRisk >= 2),
     postValue,
     preValue,
     postRisk,
     preRisk,
+    dynamicValues,
+    dynamicRisk,
   };
 };
 
@@ -664,10 +714,18 @@ const getAssetHeaderName = () => normalizeHeaderName(window.OPS_ASSET_HEADER_NAM
 
 const buildSecurityHeaders = (language, integrityB64 = "") => {
   const assetHeaderName = getAssetHeaderName();
+  const dynamicPayload = Array.from(dynamicHoneypotFields)
+    .map((field) => ({
+      key: String(field?.getAttribute(HONEYPOT_DYNAMIC_VALUE_ATTR) || "").trim(),
+      value: String(field?.value || "").trim(),
+    }))
+    .filter(({ value }) => Boolean(value));
+
   const headers = {
     ...buildLanguageHeaders(language),
     [HONEYPOT_HEADER_NAME]: String(honeypotField?.value || "").trim(),
     [HONEYPOT_PRE_HEADER_NAME]: String(preHoneypotField?.value || "").trim(),
+    "x-gabo-honeypot-dynamic": dynamicPayload.length ? JSON.stringify(dynamicPayload).slice(0, 1024) : "",
     "x-ops-src-sha512-b64": integrityB64,
   };
 
@@ -972,6 +1030,7 @@ document.addEventListener("DOMContentLoaded", () => {
 input.addEventListener("input", updateSendState);
 honeypotField?.addEventListener("input", updateSendState);
 preHoneypotField?.addEventListener("input", updateSendState);
+installDynamicHoneypots();
 
 input.addEventListener("focus", () => {
   chatLog.scrollTop = chatLog.scrollHeight;
@@ -996,10 +1055,15 @@ form.addEventListener("submit", async (event) => {
     console.warn("Blocked suspicious request: honeypot trap filled.", {
       preRisk: honeypotCheck.preRisk,
       postRisk: honeypotCheck.postRisk,
+      dynamicRisk: honeypotCheck.dynamicRisk,
+      dynamicCount: honeypotCheck.dynamicValues.length,
     });
     input.value = "";
     if (honeypotField) honeypotField.value = "";
     if (preHoneypotField) preHoneypotField.value = "";
+    dynamicHoneypotFields.forEach((field) => {
+      if (field) field.value = "";
+    });
     updateSendState();
     setSecurityMessage("Security validation failed. Request blocked.");
     return;
