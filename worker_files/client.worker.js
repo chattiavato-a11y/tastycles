@@ -44,6 +44,8 @@
   };
 
   const isObject = (x) => x && typeof x === "object" && !Array.isArray(x);
+  const MAX_MESSAGES = 30;
+  const MAX_MESSAGE_CHARS = 1000;
 
   // -------------------------
   // Default config (fallback)
@@ -296,6 +298,65 @@
   };
 
   // -------------------------
+  // Gateway input hardening (bypass TinyML in app.js)
+  // -------------------------
+  const sanitizeTextForGateway = (value) => {
+    let text = String(value ?? "");
+    text = text.replace(/\u0000/g, "");
+    text = text.replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ");
+    text = text.replace(/\r\n?/g, "\n");
+
+    text = text.replace(/```[\s\S]*?```/g, " ");
+    text = text.replace(/~~~[\s\S]*?~~~/g, " ");
+    text = text.replace(/`[^`]{1,250}`/g, " ");
+
+    text = text.replace(/<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, " ");
+    text = text.replace(/<\s*(iframe|object|embed|link|meta|base|form|svg|math)\b[^>]*>/gi, " ");
+    text = text.replace(/<\s*\/\s*(iframe|object|embed|link|meta|base|form|svg|math)\s*>/gi, " ");
+    text = text.replace(/<[^>]+>/g, " ");
+
+    text = text.replace(/\bjavascript\s*:/gi, "");
+    text = text.replace(/\bvbscript\s*:/gi, "");
+    text = text.replace(/\bdata\s*:\s*text\/html\b/gi, "");
+    text = text.replace(/\bon\w+\s*=\s*["'][\s\S]*?["']/gi, " ");
+    text = text.replace(/\bon\w+\s*=\s*[^\s>]+/gi, " ");
+
+    text = text
+      .split("\n")
+      .map((line) => {
+        const sample = line.trim();
+        if (!sample) return "";
+        const codeLike = /[{};=<>]/.test(sample) && /\b(function|class|import|export|return|const|let|var|async|await)\b/i.test(sample);
+        return codeLike ? "" : sample;
+      })
+      .join(" ");
+
+    text = text.replace(/\s+/g, " ").trim();
+    if (text.length > MAX_MESSAGE_CHARS) text = text.slice(0, MAX_MESSAGE_CHARS);
+    return text;
+  };
+
+  const sanitizeChatPayload = (payload) => {
+    const body = isObject(payload) ? { ...payload } : {};
+    const list = Array.isArray(body.messages) ? body.messages : [];
+    const cleanedMessages = [];
+
+    for (const item of list.slice(-MAX_MESSAGES)) {
+      if (!isObject(item)) continue;
+      const role = safeText(item.role || "").toLowerCase();
+      if (role !== "user" && role !== "assistant") continue;
+
+      const content = sanitizeTextForGateway(item.content);
+      if (!content) continue;
+      cleanedMessages.push({ role, content });
+    }
+
+    body.messages = cleanedMessages;
+    body.meta = isObject(body.meta) ? { ...body.meta, tiny_ml_bypassed: true, gateway_sanitized: true } : { tiny_ml_bypassed: true, gateway_sanitized: true };
+    return body;
+  };
+
+  // -------------------------
   // API calls
   // -------------------------
   const postChat = async (payload, opts) => {
@@ -317,7 +378,7 @@
     applyOptionalIntegrityHeader(headers, config);
 
     // enforce request size limits (best-effort)
-    const bodyText = JSON.stringify(payload ?? {});
+    const bodyText = JSON.stringify(sanitizeChatPayload(payload));
     const maxChars = Number(config?.limits?.max_body_chars || 8000);
     if (bodyText.length > maxChars) {
       return new Response(JSON.stringify({ error: "Request too large" }), {
