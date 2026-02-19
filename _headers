@@ -1,0 +1,30 @@
+/*
+  # --- Core Security Headers (Static Site) ---
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  X-DNS-Prefetch-Control: off
+  X-Permitted-Cross-Domain-Policies: none
+  X-XSS-Protection: 0
+  X-Robots-Tag: index, follow
+
+  # --- Cross-Origin Resource Policy (site assets) ---
+  Cross-Origin-Resource-Policy: same-site
+
+  # --- Permissions Policy (page-level capabilities) ---
+  Permissions-Policy: camera=(), geolocation=(), microphone=(self)
+
+  # --- Content Security Policy (CSP) ---
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://drastic-measures.rulathemtodos.workers.dev https://chattiavato-a11y.github.io; media-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests; block-all-mixed-content
+
+# --------------------------------------------------------------------
+# Public JSON assets under /worker_files/ may be fetched by other origins
+# (dash, github pages, etc). Make these explicitly cross-origin readable.
+# --------------------------------------------------------------------
+/worker_files/*
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET, OPTIONS
+  Access-Control-Allow-Headers: Content-Type, Accept, X-Ops-Asset-Id, X-Ops-Src-Sha512-B64, X-Gabo-Lang-Hint, X-Gabo-Lang-List, X-Gabo-Voice-Language
+  Access-Control-Max-Age: 86400
