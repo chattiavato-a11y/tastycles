@@ -547,6 +547,30 @@ const sanitizeAndValidateMessage = (raw) => {
   };
 };
 
+
+const tinyMlIntegrityDigest = async (text) => {
+  const normalized = sanitizeUserInput(text || "");
+  if (!normalized || !window.crypto?.subtle) return "";
+  const bytes = new TextEncoder().encode(normalized);
+  const hash = await crypto.subtle.digest("SHA-512", bytes);
+  const u8 = new Uint8Array(hash);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    binary += String.fromCharCode(...u8.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+};
+
+const TINY_ML_ENGINE = {
+  score: tinyMlRiskScore,
+  sanitize: sanitizeUserInput,
+  hasResidual: hasResidualMaliciousContent,
+  honeypotScore: tinyMlHoneypotRiskScore,
+  integrity: tinyMlIntegrityDigest,
+};
+window.GABO_TINY_ML = TINY_ML_ENGINE;
+
 const addMessage = (text, isUser) => {
   const row = document.createElement("div");
   row.className = `message-row${isUser ? " user" : ""}`;
@@ -864,9 +888,10 @@ const buildLanguageHeaders = (language) => {
   };
 };
 
-const buildSecurityHeaders = (language) => ({
+const buildSecurityHeaders = (language, integrityB64 = "") => ({
   ...buildLanguageHeaders(language),
   [HONEYPOT_HEADER_NAME]: String(honeypotField?.value || "").trim(),
+  "x-ops-src-sha512-b64": integrityB64,
 });
 
 const streamWorkerResponse = async (response, bubble) => {
@@ -991,6 +1016,7 @@ form.addEventListener("submit", async (event) => {
   }
 
   const message = sanitizedResult.sanitized;
+  const integrityB64 = await TINY_ML_ENGINE.integrity(message);
   addMessage(message, true);
   input.value = "";
   updateSendState();
@@ -1038,6 +1064,7 @@ form.addEventListener("submit", async (event) => {
             tiny_ml_risk: sanitizedResult.initialRisk,
             tiny_ml_risk_post_sanitize: sanitizedResult.finalRisk,
             integrity_check: sanitizedResult.integrityOk,
+            integrity_sha512_b64: integrityB64 || undefined,
             honeypot_clear: true,
           },
           honeypot: "",
@@ -1045,7 +1072,7 @@ form.addEventListener("submit", async (event) => {
       },
       {
         signal: controller.signal,
-        extraHeaders: buildSecurityHeaders(getPreferredLanguage()),
+        extraHeaders: buildSecurityHeaders(getPreferredLanguage(), integrityB64),
       }
     );
 
