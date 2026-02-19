@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.gabos.io/schemas/gabo-worker-config.schema.json",
+  "title": "Gabo Worker Config",
+  "description": "Canonical runtime config for the Gabo UI + Gateway Worker. Updated to match sha512-hex asset IDs (128 lowercase hex) used across the project.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assetRegistry",
+    "workerScript",
+    "workerEndpoint",
+    "assistantEndpoint",
+    "voiceEndpoint",
+    "ttsEndpoint",
+    "gatewayEndpoint",
+    "workerEndpointAssetId",
+    "gatewayEndpointAssetId",
+    "allowedOrigins",
+    "asset_identity",
+    "requiredHeaders",
+    "headers",
+    "routes",
+    "timeouts",
+    "limits",
+    "cors"
+  ],
+  "$defs": {
+    "sha512_hex": {
+      "type": "string",
+      "description": "Lowercase hex-encoded SHA-512 digest (128 hex chars).",
+      "pattern": "^[a-f0-9]{128}$"
+    },
+    "https_uri": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "https_origin": {
+      "type": "string",
+      "description": "Origin only (no path). Prefer lowercase host.",
+      "pattern": "^https://[a-z0-9.-]+(?::[0-9]{2,5})?$"
+    },
+    "path_route": {
+      "type": "string",
+      "pattern": "^/[^\\s]*$"
+    },
+    "header_name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z0-9-]+$"
+    }
+  },
+  "properties": {
+    "app_name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 80
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "assetRegistry": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 260
+    },
+    "workerScript": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 260
+    },
+    "workerEndpoint": {
+      "$ref": "#/$defs/https_uri"
+    },
+    "assistantEndpoint": {
+      "$ref": "#/$defs/https_uri"
+    },
+    "voiceEndpoint": {
+      "$ref": "#/$defs/https_uri"
+    },
+    "ttsEndpoint": {
+      "$ref": "#/$defs/https_uri"
+    },
+    "gatewayEndpoint": {
+      "$ref": "#/$defs/https_uri"
+    },
+    "workerEndpointAssetId": {
+      "$ref": "#/$defs/sha512_hex"
+    },
+    "gatewayEndpointAssetId": {
+      "$ref": "#/$defs/sha512_hex"
+    },
+    "allowedOrigins": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/https_origin"
+      }
+    },
+    "allowedOriginAssetIds": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/sha512_hex"
+      }
+    },
+    "asset_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["header_name", "origin_to_asset_id"],
+      "properties": {
+        "header_name": {
+          "type": "string",
+          "const": "x-ops-asset-id"
+        },
+        "origin_to_asset_id": {
+          "type": "object",
+          "description": "Origin -> asset_id (sha512 hex). Keys must be origins (no path).",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^https://[a-z0-9.-]+(?::[0-9]{2,5})?$": {
+              "$ref": "#/$defs/sha512_hex"
+            }
+          }
+        }
+      }
+    },
+    "requiredHeaders": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/header_name"
+      }
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hop_header_name", "hop_header_value", "language_hints", "optional_integrity_header"],
+      "properties": {
+        "hop_header_name": {
+          "$ref": "#/$defs/header_name"
+        },
+        "hop_header_value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "language_hints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["hint_header", "list_header", "voice_language_header"],
+          "properties": {
+            "hint_header": { "$ref": "#/$defs/header_name" },
+            "list_header": { "$ref": "#/$defs/header_name" },
+            "voice_language_header": { "$ref": "#/$defs/header_name" }
+          }
+        },
+        "optional_integrity_header": {
+          "$ref": "#/$defs/header_name"
+        }
+      }
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chat", "voice", "tts", "health"],
+      "properties": {
+        "chat": { "$ref": "#/$defs/path_route" },
+        "voice": { "$ref": "#/$defs/path_route" },
+        "tts": { "$ref": "#/$defs/path_route" },
+        "health": { "$ref": "#/$defs/path_route" }
+      }
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["voice_timeout_sec"],
+      "properties": {
+        "voice_timeout_sec": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 600
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_body_chars", "max_messages", "max_message_chars", "max_audio_bytes"],
+      "properties": {
+        "max_body_chars": { "type": "integer", "minimum": 512, "maximum": 100000 },
+        "max_messages": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "max_message_chars": { "type": "integer", "minimum": 64, "maximum": 10000 },
+        "max_audio_bytes": { "type": "integer", "minimum": 65536, "maximum": 52428800 }
+      }
+    },
+    "cors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allow_methods", "allow_headers", "expose_headers", "max_age_sec"],
+      "properties": {
+        "allow_methods": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 60
+        },
+        "allow_headers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 2, "maxLength": 80 }
+        },
+        "expose_headers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 2, "maxLength": 80 }
+        },
+        "max_age_sec": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 604800
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    }
+  }
+}
