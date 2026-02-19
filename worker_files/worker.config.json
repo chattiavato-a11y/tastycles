@@ -1,27 +1,21 @@
 {
   "app_name": "gabo",
   "environment": "production",
-
   "assetRegistry": "worker_files/worker.assets.json",
   "workerScript": "worker_files/drastic-measures.gateway.js",
-
   "workerEndpoint": "https://drastic-measures.rulathemtodos.workers.dev",
   "gatewayEndpoint": "https://drastic-measures.rulathemtodos.workers.dev",
-
   "assistantEndpoint": "https://drastic-measures.rulathemtodos.workers.dev/api/chat",
   "voiceEndpoint": "https://drastic-measures.rulathemtodos.workers.dev/api/voice",
   "ttsEndpoint": "https://drastic-measures.rulathemtodos.workers.dev/api/tts",
-
   "workerEndpointAssetId": "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
   "gatewayEndpointAssetId": "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
-
   "allowedOrigins": [
     "https://www.gabos.io",
     "https://gabos.io",
     "https://chattiavato-a11y.github.io",
     "https://drastic-measures.rulathemtodos.workers.dev"
   ],
-
   "asset_identity": {
     "header_name": "x-ops-asset-id",
     "origin_to_asset_id": {
@@ -31,9 +25,11 @@
       "https://drastic-measures.rulathemtodos.workers.dev": "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945"
     }
   },
-
-  "requiredHeaders": ["Content-Type", "Accept", "X-Ops-Asset-Id"],
-
+  "requiredHeaders": [
+    "Content-Type",
+    "Accept",
+    "X-Ops-Asset-Id"
+  ],
   "headers": {
     "hop_header_name": "x-gabo-hop",
     "hop_header_value": "gateway",
@@ -44,25 +40,21 @@
     },
     "optional_integrity_header": "x-ops-src-sha512-b64"
   },
-
   "routes": {
     "chat": "/api/chat",
     "voice": "/api/voice",
     "tts": "/api/tts",
     "health": "/health"
   },
-
   "timeouts": {
     "voice_timeout_sec": 120
   },
-
   "limits": {
     "max_body_chars": 8000,
     "max_messages": 30,
     "max_message_chars": 1000,
     "max_audio_bytes": 12582912
   },
-
   "cors": {
     "allow_methods": "GET, POST, OPTIONS",
     "allow_headers": [
@@ -88,9 +80,32 @@
     ],
     "max_age_sec": 86400
   },
-
   "notes": [
     "Canonical config aligned to drastic-measures CF Worker gateway (HTML/CSS/JS frontend).",
     "Remove the duplicate root worker.config.json; use this file as the single source of truth."
-  ]
+  ],
+  "security_headers": {
+    "x_frame_options": "DENY",
+    "x_content_type_options": "nosniff",
+    "referrer_policy": "strict-origin-when-cross-origin",
+    "strict_transport_security": "max-age=31536000; includeSubDomains; preload",
+    "cross_origin_resource_policy": "same-site",
+    "cross_origin_opener_policy": "same-origin",
+    "content_security_policy": "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+  },
+  "seo": {
+    "robots_index": true,
+    "canonical_hosts": [
+      "https://gabos.io",
+      "https://www.gabos.io"
+    ],
+    "sitemap_path": "/sitemap.xml",
+    "search_console_compatible": true
+  },
+  "integrity": {
+    "algorithm": "sha512",
+    "request_header": "x-ops-src-sha512-b64",
+    "require_subresource_integrity": true,
+    "notes": "Apply integrity attributes to external CDN resources in HTML templates."
+  }
 }
