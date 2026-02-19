@@ -1,0 +1,5 @@
+Contact: mailto:security@gabos.io
+Expires: 2027-12-31T23:59:59.000Z
+Policy: https://gabos.io/
+Preferred-Languages: en, es
+Canonical: https://gabos.io/security.txt

@@ -7,16 +7,25 @@
   X-DNS-Prefetch-Control: off
   X-Permitted-Cross-Domain-Policies: none
   X-XSS-Protection: 0
-  X-Robots-Tag: index, follow
+  X-Robots-Tag: index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1
 
-  # --- Cross-Origin Resource Policy (site assets) ---
+  # --- Cross-Origin Policies ---
   Cross-Origin-Resource-Policy: same-site
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+  # --- Clickjacking/MIME hardening ---
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+
+  # --- Integrity policy (SRI enforcement target for script/style in HTML) ---
+  Integrity-Policy: require-sri-for script style
 
   # --- Permissions Policy (page-level capabilities) ---
   Permissions-Policy: camera=(), geolocation=(), microphone=(self)
 
-  # --- Content Security Policy (CSP) ---
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://drastic-measures.rulathemtodos.workers.dev https://chattiavato-a11y.github.io; media-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests; block-all-mixed-content
+  # --- Content Security Policy (CSP) + SEO bot compatibility ---
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://drastic-measures.rulathemtodos.workers.dev https://chattiavato-a11y.github.io; media-src 'self' blob:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests; block-all-mixed-content
 
 # --------------------------------------------------------------------
 # Public JSON assets under /worker_files/ may be fetched by other origins

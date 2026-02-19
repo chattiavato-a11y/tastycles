@@ -17,6 +17,25 @@ const HONEYPOT_PRE_HEADER_NAME = "x-gabo-honeypot-pre";
 const HONEYPOT_DYNAMIC_ATTR = "data-gabo-honeypot";
 const HONEYPOT_DYNAMIC_VALUE_ATTR = "data-gabo-honeypot-value";
 
+const hideHoneypotField = (field) => {
+  if (!field) return;
+  field.setAttribute("aria-hidden", "true");
+  field.setAttribute("tabindex", "-1");
+  field.setAttribute("autocomplete", "off");
+  field.style.position = "absolute";
+  field.style.left = "-9999px";
+  field.style.width = "1px";
+  field.style.height = "1px";
+  field.style.margin = "0";
+  field.style.padding = "0";
+  field.style.border = "0";
+  field.style.opacity = "0";
+  field.style.pointerEvents = "none";
+  field.style.clipPath = "inset(50%)";
+  field.style.overflow = "hidden";
+  field.style.whiteSpace = "nowrap";
+};
+
 // -------------------------
 // Canonical runtime config (single source of truth)
 // -------------------------
@@ -375,6 +394,8 @@ const rotateBackgroundGradient = () => {
 rotateBackgroundGradient();
 applyTranslations();
 startIntroRotation();
+hideHoneypotField(honeypotField);
+hideHoneypotField(preHoneypotField);
 
 // -------------------------
 // Streaming state + thinking UI
@@ -411,16 +432,10 @@ const installDynamicHoneypots = () => {
 
     const hp = document.createElement("input");
     hp.type = "text";
-    hp.autocomplete = "off";
-    hp.tabIndex = -1;
-    hp.setAttribute("aria-hidden", "true");
     hp.setAttribute(HONEYPOT_DYNAMIC_ATTR, "1");
     hp.setAttribute(HONEYPOT_DYNAMIC_VALUE_ATTR, `${tag}-${index}`);
     hp.className = "gabo-honeypot-field";
-    hp.style.position = "absolute";
-    hp.style.left = "-9999px";
-    hp.style.opacity = "0";
-    hp.style.pointerEvents = "none";
+    hideHoneypotField(hp);
 
     control.parentElement.insertBefore(hp, control);
     registerDynamicHoneypotField(hp);
@@ -487,15 +502,17 @@ cancelBtn?.addEventListener("click", cancelStream);
 // Tiny-ML sanitizer
 // -------------------------
 const TINY_ML_PATTERNS = [
-  { regex: /<\s*script\b/i, weight: 5 },
-  { regex: /<\/?\s*iframe\b/i, weight: 4 },
-  { regex: /javascript\s*:/i, weight: 4 },
-  { regex: /\bon\w+\s*=\s*["']/i, weight: 4 },
-  { regex: /\beval\s*\(/i, weight: 4 },
-  { regex: /document\.(cookie|write)/i, weight: 3 },
-  { regex: /localStorage|sessionStorage/i, weight: 2 },
-  { regex: /\b(function|class|import|export|return|const|let|var)\b\s+[a-zA-Z_$]/i, weight: 1 },
-  { regex: /[{};]{4,}/, weight: 1 },
+  { regex: /<\s*script\b/i, weight: 6 },
+  { regex: /<\/?\s*(iframe|object|embed|svg|math|style|link|meta|base|form)\b/i, weight: 5 },
+  { regex: /javascript\s*:/i, weight: 5 },
+  { regex: /\b(vbscript|data\s*:\s*text\/html)\b/i, weight: 5 },
+  { regex: /\bon\w+\s*=\s*["']/i, weight: 5 },
+  { regex: /\b(eval|Function|setTimeout\s*\(\s*["'`]|setInterval\s*\(\s*["'`])\b/i, weight: 5 },
+  { regex: /document\.(cookie|write)/i, weight: 4 },
+  { regex: /localStorage|sessionStorage/i, weight: 3 },
+  { regex: /\b(import|export|class|function|return|const|let|var|async|await)\b/i, weight: 2 },
+  { regex: /[{};=<>]{6,}/, weight: 2 },
+  { regex: /```[\s\S]*?```|~~~[\s\S]*?~~~/, weight: 3 },
 ];
 
 const tinyMlRiskScore = (text) => {
@@ -512,13 +529,35 @@ const sanitizeUserInput = (text) => {
   let out = String(text || "");
   out = out.replace(/\u0000/g, "");
   out = out.replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ");
+
+  // Remove fenced and inline code first (tiny-ML anti code payload)
+  out = out.replace(/```[\s\S]*?```/g, " [removed_code_block] ");
+  out = out.replace(/~~~[\s\S]*?~~~/g, " [removed_code_block] ");
+  out = out.replace(/`[^`]{1,200}`/g, " [removed_inline_code] ");
+
   out = out.replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, " ");
-  out = out.replace(/<\s*(iframe|object|embed|style|form|svg|math)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, " ");
+  out = out.replace(/<\s*(iframe|object|embed|style|form|svg|math|link|meta|base)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, " ");
+  out = out.replace(/<\s*(iframe|object|embed|style|form|svg|math|link|meta|base)\b[^>]*\/?\s*>/gi, " ");
   out = out.replace(/<[^>]+>/g, " ");
+
   out = out.replace(/javascript\s*:/gi, "");
+  out = out.replace(/vbscript\s*:/gi, "");
+  out = out.replace(/data\s*:\s*text\/html/gi, "");
   out = out.replace(/\bon\w+\s*=\s*["'][\s\S]*?["']/gi, "");
   out = out.replace(/\bon\w+\s*=\s*[^\s>]+/gi, "");
-  out = out.replace(/\b(function|class|import|export|return|const|let|var)\b\s+[a-zA-Z_$][\w$]*/gi, " ");
+
+  // Remove highly code-like lines
+  out = out
+    .split(/\r?\n/)
+    .map((line) => {
+      const sample = String(line || "").trim();
+      if (!sample) return "";
+      const codeLike = /[{};=<>]/.test(sample) && /\b(function|class|import|export|return|const|let|var|async|await)\b/i.test(sample);
+      return codeLike ? " " : sample;
+    })
+    .join(" ");
+
+  out = out.replace(/\b(function|class|import|export|return|const|let|var|async|await)\b\s+[a-zA-Z_$][\w$]*/gi, " ");
   out = out.replace(/\s+/g, " ").trim();
   return out;
 };
@@ -526,10 +565,13 @@ const sanitizeUserInput = (text) => {
 const hasResidualMaliciousContent = (text) => {
   const checks = [
     /<\s*script\b/i,
+    /<\/?\s*(iframe|object|embed|svg|math|style|link|meta|base|form)\b/i,
     /javascript\s*:/i,
+    /\b(vbscript|data\s*:\s*text\/html)\b/i,
     /\bon\w+\s*=/i,
-    /\beval\s*\(/i,
+    /\b(eval|Function|setTimeout\s*\(\s*["'`]|setInterval\s*\(\s*["'`])\b/i,
     /document\.(cookie|write)/i,
+    /\b(import|export|class|function|const|let|var)\b\s+[A-Za-z_$]/,
   ];
   return checks.some((re) => re.test(String(text || "")));
 };
@@ -1198,7 +1240,7 @@ const initApp = async () => {
   if (!OPS_ASSET_ID) {
     setSecurityMessage("Security checks active, but asset identity mapping is missing for this origin.");
   } else {
-    setSecurityMessage("Security checks active (honeypot + gateway validation + asset identity).");
+    setSecurityMessage("Security checks active (gateway validation + asset identity).");
   }
 };
 
