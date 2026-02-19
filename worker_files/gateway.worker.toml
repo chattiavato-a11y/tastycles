@@ -1,7 +1,0 @@
-name = "gateway"
-main = "drastic-measures.gateway.js"
-compatibility_date = "2024-10-10"
-
-[vars]
-ALLOWED_ORIGINS = "https://www.gabos.io,https://gabos.io,https://chattiavato-a11y.github.io,https://drastic-measures.rulathemtodos.workers.dev"
-REQUIRED_HEADERS = "Content-Type,Accept,X-Ops-Asset-Id"
