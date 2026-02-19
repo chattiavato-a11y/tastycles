@@ -1,393 +1,459 @@
 /**
- * worker_files/client.worker.js — WorkerClient (browser-side)
+ * worker_files/client.worker.js — Browser client for drastic-measures gateway
  *
  * Goals:
- * - Load canonical config from same-origin JSON (worker_files/worker.config.json)
- * - Enforce safe endpoint selection (https only, consistent origins)
- * - Attach required security headers (x-ops-asset-id, accept, content-type)
- * - Provide API helpers used by app.js:
- *     - WorkerClient.init()
- *     - WorkerClient.getConfig()
- *     - WorkerClient.postChat(payload, opts)
- *     - WorkerClient.postVoiceSTT(audioBlob, opts)
- *     - WorkerClient.postTTS(payload, opts)
+ * - Fetch + cache worker_files/worker.config.json (and optionally registry)
+ * - Provide small, safe helpers for:
+ *   - postChat()  -> SSE stream response
+ *   - postVoiceSTT() -> /api/voice?mode=stt (binary audio)
+ *   - postTTS()  -> /api/tts (json -> audio)
+ * - Enforce:
+ *   - Allowed endpoints (same-origin or allowlisted)
+ *   - Asset identity header x-ops-asset-id (from config or window.OPS_ASSET_ID)
+ *   - Optional integrity header x-ops-src-sha512-b64 (from app.js TinyML)
  *
- * Optional (best-effort):
- * - If worker_files/registry.worker.config.json exists, verify SHA-512(hex)
- *   of worker_files/worker.config.json before trusting it.
- *
- * CSP-safe:
- * - No eval/new Function/inline script injection
- * - No dynamic script loading
+ * NOTE:
+ * - This file is designed to run under a strict CSP: script-src 'self'
+ * - No eval, no dynamic script injection, no external deps.
  */
 
 (() => {
   "use strict";
 
   // -------------------------
-  // Paths (same-origin)
+  // Safe helpers
   // -------------------------
-  const CONFIG_URL_PRIMARY = "worker_files/worker.config.json";
-  const CONFIG_URL_FALLBACK = "worker.config.json"; // optional fallback if you keep a root copy
-  const CONFIG_REGISTRY_RECORD_URL = "worker_files/registry.worker.config.json"; // optional (if present)
+  const safeText = (v) => String(v ?? "").trim();
+  const normalizeOrigin = (v) => {
+    try {
+      return new URL(String(v), window.location.origin).origin.toLowerCase();
+    } catch {
+      return safeText(v).replace(/\/$/, "").toLowerCase();
+    }
+  };
+
+  const toBaseUrl = (urlLike) => {
+    try {
+      const u = new URL(String(urlLike), window.location.origin);
+      u.hash = "";
+      u.search = "";
+      return u.toString().replace(/\/$/, "");
+    } catch {
+      return safeText(urlLike).replace(/\/$/, "");
+    }
+  };
+
+  const isObject = (x) => x && typeof x === "object" && !Array.isArray(x);
 
   // -------------------------
-  // Limits (defensive)
+  // Default config (fallback)
   // -------------------------
-  const MAX_JSON_BYTES = 250_000;
-  const MAX_TEXT_BYTES = 800_000;
+  const DEFAULT_WORKER_ORIGIN = "https://drastic-measures.rulathemtodos.workers.dev";
+
+  const DEFAULT_CONFIG = {
+    app_name: "gabo",
+    environment: "production",
+    assetRegistry: "worker_files/worker.assets.json",
+    workerScript: "worker_files/drastic-measures.gateway.js",
+    workerEndpoint: DEFAULT_WORKER_ORIGIN,
+    assistantEndpoint: `${DEFAULT_WORKER_ORIGIN}/api/chat`,
+    voiceEndpoint: `${DEFAULT_WORKER_ORIGIN}/api/voice`,
+    ttsEndpoint: `${DEFAULT_WORKER_ORIGIN}/api/tts`,
+    gatewayEndpoint: DEFAULT_WORKER_ORIGIN,
+    workerEndpointAssetId:
+      "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+    gatewayEndpointAssetId:
+      "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+    allowedOrigins: [
+      "https://www.gabos.io",
+      "https://gabos.io",
+      "https://chattiavato-a11y.github.io",
+      "https://drastic-measures.rulathemtodos.workers.dev",
+    ],
+    allowedOriginAssetIds: [
+      "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
+      "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
+      "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
+      "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+    ],
+    asset_identity: {
+      header_name: "x-ops-asset-id",
+      origin_to_asset_id: {
+        "https://www.gabos.io":
+          "b91f605b23748de5cf02db0de2dd59117b31c709986a3c72837d0af8756473cf2779c206fc6ef80a57fdeddefa4ea11b972572f3a8edd9ed77900f9385e94bd6",
+        "https://gabos.io":
+          "8cdeef86bd180277d5b080d571ad8e6dbad9595f408b58475faaa3161f07448fbf12799ee199e3ee257405b75de555055fd5f43e0ce75e0740c4dc11bf86d132",
+        "https://chattiavato-a11y.github.io":
+          "b8f12ffa3559cee4ac71cb5f54eba1aed46394027f52e562d20be7a523db2a036f20c6e8fb0577c0a8d58f2fd198046230ebc0a73f4f1e71ff7c377d656f0756",
+        "https://drastic-measures.rulathemtodos.workers.dev":
+          "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
+      },
+    },
+    requiredHeaders: ["Content-Type", "Accept", "X-Ops-Asset-Id"],
+    headers: {
+      hop_header_name: "x-gabo-hop",
+      hop_header_value: "gateway",
+      language_hints: {
+        hint_header: "x-gabo-lang-hint",
+        list_header: "x-gabo-lang-list",
+        voice_language_header: "x-gabo-voice-language",
+      },
+      optional_integrity_header: "x-ops-src-sha512-b64",
+    },
+    routes: { chat: "/api/chat", voice: "/api/voice", tts: "/api/tts", health: "/health" },
+    timeouts: { voice_timeout_sec: 120 },
+    limits: { max_body_chars: 8000, max_messages: 30, max_message_chars: 1000, max_audio_bytes: 12582912 },
+  };
 
   // -------------------------
   // Internal state
   // -------------------------
-  let _inited = false;
-  let _config = null;
+  const STATE = {
+    loaded: false,
+    config: { ...DEFAULT_CONFIG },
+    registry: null,
+    lastLoadAt: 0,
+    lastError: "",
+  };
 
   // -------------------------
-  // Tiny helpers
+  // Config + registry loading
   // -------------------------
-  function safeTextOnly(s) {
-    s = String(s || "");
-    let out = "";
-    for (let i = 0; i < s.length; i++) {
-      const c = s.charCodeAt(i);
-      if (c === 0) continue;
-      const ok = c === 9 || c === 10 || c === 13 || (c >= 32 && c <= 126) || c >= 160;
-      if (ok) out += s[i];
-    }
-    return out.trim();
-  }
+  const CONFIG_URL = "worker_files/worker.config.json";
+  const REGISTRY_URL_DEFAULT = "worker_files/worker.assets.json";
 
-  function normalizeOrigin(value) {
-    try {
-      return new URL(String(value), window.location.href).origin.toLowerCase();
-    } catch {
-      return String(value || "")
-        .trim()
-        .replace(/\/$/, "")
-        .toLowerCase();
-    }
-  }
-
-  function isHttpsUrl(u) {
-    try {
-      const url = new URL(String(u), window.location.href);
-      return url.protocol === "https:";
-    } catch {
-      return false;
-    }
-  }
-
-  function normalizeIso2(code) {
-    const s = safeTextOnly(code || "").toLowerCase();
-    if (!s) return "";
-    const two = s.includes("-") ? s.split("-")[0] : s;
-    return (two || "").slice(0, 2);
-  }
-
-  async function fetchTextSameOrigin(path, maxBytes) {
-    const url = new URL(path, window.location.href).toString();
+  const fetchJson = async (url, opts) => {
     const res = await fetch(url, {
       method: "GET",
       cache: "no-store",
       credentials: "same-origin",
-      mode: "same-origin",
-      redirect: "error",
+      ...(opts || {}),
+      headers: { accept: "application/json", ...(opts?.headers || {}) },
     });
-    if (!res.ok) throw new Error(`Fetch failed (${res.status}) for ${path}`);
-    const text = await res.text();
-    if (text.length > (maxBytes || MAX_TEXT_BYTES)) throw new Error(`Response too large for ${path}`);
-    return text;
-  }
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`Fetch failed (${res.status}) ${txt.slice(0, 180)}`);
+    }
+    return res.json();
+  };
 
-  function parseJsonStrict(text, label) {
-    const raw = String(text || "");
-    if (!raw) throw new Error(`Empty JSON (${label})`);
-    if (raw.length > MAX_JSON_BYTES) throw new Error(`JSON too large (${label})`);
-    let obj;
+  const mergeConfig = (base, incoming) => {
+    const out = { ...base };
+
+    if (!isObject(incoming)) return out;
+
+    // shallow merge for known keys
+    const copyKeys = [
+      "app_name",
+      "environment",
+      "assetRegistry",
+      "workerScript",
+      "workerEndpoint",
+      "assistantEndpoint",
+      "voiceEndpoint",
+      "ttsEndpoint",
+      "gatewayEndpoint",
+      "workerEndpointAssetId",
+      "gatewayEndpointAssetId",
+    ];
+    copyKeys.forEach((k) => {
+      if (typeof incoming[k] === "string" && safeText(incoming[k])) out[k] = safeText(incoming[k]);
+    });
+
+    if (Array.isArray(incoming.allowedOrigins)) out.allowedOrigins = incoming.allowedOrigins.slice(0, 50).map(String);
+    if (Array.isArray(incoming.allowedOriginAssetIds)) out.allowedOriginAssetIds = incoming.allowedOriginAssetIds.slice(0, 100).map(String);
+
+    if (isObject(incoming.asset_identity)) {
+      out.asset_identity = out.asset_identity || {};
+      if (typeof incoming.asset_identity.header_name === "string") out.asset_identity.header_name = safeText(incoming.asset_identity.header_name);
+      if (isObject(incoming.asset_identity.origin_to_asset_id)) {
+        out.asset_identity.origin_to_asset_id = { ...incoming.asset_identity.origin_to_asset_id };
+      }
+    }
+
+    if (Array.isArray(incoming.requiredHeaders)) out.requiredHeaders = incoming.requiredHeaders.slice(0, 30).map(String);
+
+    if (isObject(incoming.headers)) out.headers = { ...out.headers, ...incoming.headers };
+    if (isObject(incoming.routes)) out.routes = { ...out.routes, ...incoming.routes };
+    if (isObject(incoming.timeouts)) out.timeouts = { ...out.timeouts, ...incoming.timeouts };
+    if (isObject(incoming.limits)) out.limits = { ...out.limits, ...incoming.limits };
+
+    // normalize endpoints
+    out.workerEndpoint = toBaseUrl(out.workerEndpoint);
+    out.gatewayEndpoint = toBaseUrl(out.gatewayEndpoint);
+    out.assistantEndpoint = safeText(out.assistantEndpoint);
+    out.voiceEndpoint = safeText(out.voiceEndpoint);
+    out.ttsEndpoint = safeText(out.ttsEndpoint);
+
+    // ensure assistant/voice/tts endpoints align to base if missing
+    const baseUrl = out.gatewayEndpoint || out.workerEndpoint || DEFAULT_WORKER_ORIGIN;
+    if (!out.assistantEndpoint) out.assistantEndpoint = `${baseUrl}${out.routes.chat || "/api/chat"}`;
+    if (!out.voiceEndpoint) out.voiceEndpoint = `${baseUrl}${out.routes.voice || "/api/voice"}`;
+    if (!out.ttsEndpoint) out.ttsEndpoint = `${baseUrl}${out.routes.tts || "/api/tts"}`;
+
+    return out;
+  };
+
+  const isAllowedEndpointOrigin = (targetUrl, config) => {
     try {
-      obj = JSON.parse(raw);
+      const u = new URL(String(targetUrl), window.location.origin);
+      const targetOrigin = u.origin.toLowerCase();
+      const currentOrigin = normalizeOrigin(window.location.origin);
+      if (targetOrigin === currentOrigin) return true;
+      const allowed = Array.isArray(config.allowedOrigins) ? config.allowedOrigins : [];
+      return allowed.some((o) => normalizeOrigin(o) === targetOrigin);
     } catch {
-      throw new Error(`Invalid JSON (${label})`);
+      return false;
     }
-    if (!obj || typeof obj !== "object") throw new Error(`Bad JSON object (${label})`);
-    return obj;
-  }
+  };
 
-  async function sha512Hex(text) {
-    if (!window.crypto?.subtle) return "";
-    const bytes = new TextEncoder().encode(String(text || ""));
-    const digest = await crypto.subtle.digest("SHA-512", bytes);
-    const u8 = new Uint8Array(digest);
-    let hex = "";
-    for (let i = 0; i < u8.length; i++) {
-      const b = u8[i].toString(16).padStart(2, "0");
-      hex += b;
+  const deriveAssetIdForCurrentOrigin = (config) => {
+    // Highest priority: window.OPS_ASSET_ID (already computed by app.js) if present
+    const w = window;
+    const pre = safeText(w.OPS_ASSET_ID || "");
+    if (pre) return pre;
+
+    // Otherwise use mapping in config
+    const map = config?.asset_identity?.origin_to_asset_id || {};
+    const key = normalizeOrigin(window.location.origin);
+    for (const origin in map) {
+      if (normalizeOrigin(origin) === key) return safeText(map[origin]);
     }
-    return hex;
-  }
+    return "";
+  };
 
-  function headersFrom(extra) {
+  const init = async () => {
+    if (STATE.loaded) return;
+
+    try {
+      const cfg = await fetchJson(CONFIG_URL);
+      STATE.config = mergeConfig(DEFAULT_CONFIG, cfg);
+
+      // Optional: fetch registry (best-effort)
+      const regPath = safeText(STATE.config.assetRegistry) || REGISTRY_URL_DEFAULT;
+      try {
+        STATE.registry = await fetchJson(regPath);
+      } catch (e) {
+        // registry is optional for runtime; don't fail init
+        STATE.registry = null;
+      }
+
+      STATE.loaded = true;
+      STATE.lastLoadAt = Date.now();
+      STATE.lastError = "";
+    } catch (e) {
+      STATE.loaded = true; // prevent loops; app can still work with defaults
+      STATE.lastLoadAt = Date.now();
+      STATE.lastError = String(e?.message || e);
+      STATE.config = { ...DEFAULT_CONFIG };
+      STATE.registry = null;
+      console.warn("WorkerClient init fallback:", STATE.lastError);
+    }
+  };
+
+  const getConfig = () => ({ ...STATE.config });
+
+  // -------------------------
+  // Request header builder
+  // -------------------------
+  const buildBaseHeaders = (extra, config) => {
     const h = new Headers();
+
+    // Required baseline
+    h.set("accept", "text/event-stream");
+    h.set("content-type", "application/json");
+
+    // Asset identity: x-ops-asset-id
+    const headerName = safeText(config?.asset_identity?.header_name || "x-ops-asset-id").toLowerCase();
+    const assetId = deriveAssetIdForCurrentOrigin(config);
+    if (assetId) h.set(headerName, assetId);
+
+    // Forward UI origin hint for Gateway optional usage
+    h.set("x-gabo-origin", window.location.origin);
+
+    // Merge caller-provided headers (case-insensitive merge)
     if (extra && typeof extra === "object") {
-      Object.keys(extra).forEach((k) => {
-        const key = String(k || "").trim();
-        const val = String(extra[k] ?? "").trim();
-        if (key && val) h.set(key, val);
+      for (const [k, v] of Object.entries(extra)) {
+        if (!k) continue;
+        const key = String(k).trim();
+        if (!key) continue;
+        h.set(key, String(v ?? ""));
+      }
+    }
+
+    return h;
+  };
+
+  const applyOptionalIntegrityHeader = (headers, config) => {
+    const fromHeader = safeText(headers.get("x-ops-src-sha512-b64") || "");
+    if (fromHeader) return;
+
+    const windowCandidate = safeText(window.OPS_SRC_SHA512_B64 || window.__OPS_SRC_SHA512_B64__ || "");
+    if (!windowCandidate) return;
+
+    const integrityHeader = safeText(config?.headers?.optional_integrity_header || "x-ops-src-sha512-b64").toLowerCase();
+    headers.set(integrityHeader, windowCandidate);
+  };
+
+  // -------------------------
+  // API calls
+  // -------------------------
+  const postChat = async (payload, opts) => {
+    await init();
+    const config = STATE.config;
+    const endpoint = safeText(config.assistantEndpoint) || `${config.gatewayEndpoint}${config.routes.chat || "/api/chat"}`;
+
+    if (!isAllowedEndpointOrigin(endpoint, config)) {
+      return new Response(JSON.stringify({ error: "Endpoint origin not allowed" }), {
+        status: 403,
+        headers: { "content-type": "application/json; charset=utf-8" },
       });
     }
-    return h;
-  }
 
-  function mustString(x, label) {
-    const v = safeTextOnly(x || "");
-    if (!v) throw new Error(`${label} missing`);
-    return v;
-  }
+    const signal = opts?.signal;
+    const extraHeaders = opts?.extraHeaders || {};
 
-  // -------------------------
-  // Config validation / normalization
-  // -------------------------
-  function normalizeConfig(raw) {
-    const cfg = raw && typeof raw === "object" ? raw : {};
+    const headers = buildBaseHeaders(extraHeaders, config);
+    applyOptionalIntegrityHeader(headers, config);
 
-    const workerEndpoint = safeTextOnly(cfg.workerEndpoint || "");
-    const assistantEndpoint = safeTextOnly(cfg.assistantEndpoint || "");
-    const voiceEndpoint = safeTextOnly(cfg.voiceEndpoint || "");
-    const ttsEndpoint = safeTextOnly(cfg.ttsEndpoint || "");
-    const gatewayEndpoint = safeTextOnly(cfg.gatewayEndpoint || "");
-
-    const allowedOrigins = Array.isArray(cfg.allowedOrigins) ? cfg.allowedOrigins.map(normalizeOrigin) : [];
-    const requiredHeaders = Array.isArray(cfg.requiredHeaders)
-      ? cfg.requiredHeaders.map((h) => safeTextOnly(h)).filter(Boolean)
-      : [];
-
-    const assetIdentity = cfg.asset_identity && typeof cfg.asset_identity === "object" ? cfg.asset_identity : {};
-    const headerName = safeTextOnly(assetIdentity.header_name || "x-ops-asset-id").toLowerCase();
-
-    const mapIn = assetIdentity.origin_to_asset_id && typeof assetIdentity.origin_to_asset_id === "object"
-      ? assetIdentity.origin_to_asset_id
-      : {};
-
-    const originToAssetId = {};
-    Object.keys(mapIn).forEach((k) => {
-      const o = normalizeOrigin(k);
-      const v = safeTextOnly(mapIn[k]);
-      if (o && v) originToAssetId[o] = v;
-    });
-
-    // Prefer gatewayEndpoint if present, else derive from assistantEndpoint/workerEndpoint.
-    let base = gatewayEndpoint || workerEndpoint || "";
-    if (!base && assistantEndpoint) {
-      try {
-        const u = new URL(assistantEndpoint, window.location.href);
-        base = u.origin;
-      } catch {}
-    }
-    base = String(base || "").replace(/\/$/, "");
-
-    // Ensure endpoints are https
-    const finalWorker = workerEndpoint || base;
-    const finalAssistant = assistantEndpoint || (base ? `${base}/api/chat` : "");
-    const finalVoice = voiceEndpoint || (base ? `${base}/api/voice` : "");
-    const finalTts = ttsEndpoint || (base ? `${base}/api/tts` : "");
-    const finalGateway = gatewayEndpoint || base || finalWorker;
-
-    // Hard checks (fail closed)
-    if (!isHttpsUrl(finalGateway)) throw new Error("gatewayEndpoint must be https");
-    if (!isHttpsUrl(finalAssistant)) throw new Error("assistantEndpoint must be https");
-    if (!isHttpsUrl(finalVoice)) throw new Error("voiceEndpoint must be https");
-    if (!isHttpsUrl(finalTts)) throw new Error("ttsEndpoint must be https");
-
-    // Lock endpoints to same origin (prevents config swapping to a random host)
-    const gwOrigin = normalizeOrigin(finalGateway);
-    const aOrigin = normalizeOrigin(finalAssistant);
-    const vOrigin = normalizeOrigin(finalVoice);
-    const tOrigin = normalizeOrigin(finalTts);
-    if (aOrigin !== gwOrigin || vOrigin !== gwOrigin || tOrigin !== gwOrigin) {
-      throw new Error("Endpoints must share the same origin as gatewayEndpoint");
+    // enforce request size limits (best-effort)
+    const bodyText = JSON.stringify(payload ?? {});
+    const maxChars = Number(config?.limits?.max_body_chars || 8000);
+    if (bodyText.length > maxChars) {
+      return new Response(JSON.stringify({ error: "Request too large" }), {
+        status: 413,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      });
     }
 
-    // Validate allowed origin list contains current origin (warn only; gateway enforces anyway)
-    const currentOrigin = normalizeOrigin(window.location.origin);
-    const originAllowed = allowedOrigins.includes(currentOrigin);
-
-    return {
-      workerEndpoint: finalWorker,
-      gatewayEndpoint: finalGateway,
-      assistantEndpoint: finalAssistant,
-      voiceEndpoint: finalVoice,
-      ttsEndpoint: finalTts,
-      allowedOrigins,
-      requiredHeaders,
-      asset_identity: {
-        header_name: headerName,
-        origin_to_asset_id: originToAssetId,
-      },
-      _runtime: {
-        currentOrigin,
-        originAllowed,
-      },
-    };
-  }
-
-  async function maybeVerifyConfigIntegrity(configText) {
-    // Best-effort: only if registry record exists and crypto is available.
-    try {
-      const regText = await fetchTextSameOrigin(CONFIG_REGISTRY_RECORD_URL, MAX_JSON_BYTES);
-      const reg = parseJsonStrict(regText, "registry.worker.config.json");
-      const expected = safeTextOnly(reg?.integrity?.sha512 || "");
-      if (!expected || expected.length !== 128) return; // no strict record
-      const got = await sha512Hex(configText);
-      if (!got) return; // no crypto support
-      if (got !== expected) throw new Error("worker.config.json integrity check failed (sha512 mismatch)");
-    } catch (e) {
-      // If the registry record is missing, skip silently.
-      // If it exists but mismatches, we throw (fail closed).
-      const msg = String(e?.message || e);
-      if (msg.includes("Fetch failed (404)") || msg.includes("Fetch failed (403)")) return;
-      if (msg.includes("integrity check failed")) throw e;
-      // Other parse errors: skip (best-effort)
-      return;
-    }
-  }
-
-  // -------------------------
-  // Public API
-  // -------------------------
-  async function init() {
-    if (_inited && _config) return;
-
-    // Try primary config location first
-    let configText = "";
-    try {
-      configText = await fetchTextSameOrigin(CONFIG_URL_PRIMARY, MAX_JSON_BYTES);
-    } catch {
-      // fallback
-      configText = await fetchTextSameOrigin(CONFIG_URL_FALLBACK, MAX_JSON_BYTES);
-    }
-
-    // Optional integrity verify (if registry record exists)
-    await maybeVerifyConfigIntegrity(configText);
-
-    const raw = parseJsonStrict(configText, "worker.config.json");
-    _config = normalizeConfig(raw);
-    _inited = true;
-  }
-
-  function getConfig() {
-    return _config ? { ..._config } : {};
-  }
-
-  function getAssetIdForCurrentOrigin() {
-    const cfg = _config;
-    if (!cfg) return "";
-    const currentOrigin = normalizeOrigin(window.location.origin);
-    const map = cfg.asset_identity?.origin_to_asset_id || {};
-    return safeTextOnly(map[currentOrigin] || "");
-  }
-
-  function buildRequiredHeaders(extraHeaders) {
-    const cfg = _config || {};
-    const currentOrigin = normalizeOrigin(window.location.origin);
-
-    const base = headersFrom(extraHeaders);
-
-    // Required by gateway
-    const assetHeader = safeTextOnly(cfg.asset_identity?.header_name || "x-ops-asset-id").toLowerCase();
-    const assetId = getAssetIdForCurrentOrigin();
-    if (assetId) base.set(assetHeader, assetId);
-
-    // Optional forward hint (gateway reads Origin naturally, but this can help in edge cases)
-    if (!base.has("x-gabo-origin")) base.set("x-gabo-origin", currentOrigin);
-
-    return base;
-  }
-
-  async function postChat(payload, opts) {
-    await init();
-    const cfg = _config;
-
-    const url = mustString(cfg.assistantEndpoint, "assistantEndpoint");
-    const h = buildRequiredHeaders(opts?.extraHeaders);
-
-    h.set("content-type", "application/json");
-    h.set("accept", "text/event-stream");
-
-    return fetch(url, {
+    return fetch(endpoint, {
       method: "POST",
-      headers: h,
-      body: JSON.stringify(payload || {}),
-      signal: opts?.signal,
+      headers,
+      body: bodyText,
+      signal,
       cache: "no-store",
-      redirect: "error",
       credentials: "omit",
+      mode: "cors",
     });
-  }
+  };
 
-  async function postVoiceSTT(audioBlob, opts) {
+  const postVoiceSTT = async (audioBlob, opts) => {
     await init();
-    const cfg = _config;
+    const config = STATE.config;
+    const base = safeText(config.voiceEndpoint) || `${config.gatewayEndpoint}${config.routes.voice || "/api/voice"}`;
+    const endpoint = `${base}?mode=stt`;
 
-    const base = mustString(cfg.voiceEndpoint, "voiceEndpoint");
-    const url = `${String(base).replace(/\/$/, "")}?mode=stt`;
+    if (!isAllowedEndpointOrigin(endpoint, config)) {
+      return new Response(JSON.stringify({ error: "Endpoint origin not allowed" }), {
+        status: 403,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      });
+    }
 
-    const h = buildRequiredHeaders(opts?.extraHeaders);
-    h.set("accept", "application/json");
+    const signal = opts?.signal;
+    const extraHeaders = opts?.extraHeaders || {};
+    const headers = new Headers();
 
-    // If browser sets the content-type for Blob automatically, we keep it.
-    // If Blob has a known type, set it explicitly.
-    const ct = safeTextOnly(audioBlob?.type || "");
-    if (ct) h.set("content-type", ct);
+    // Asset identity header (same as chat)
+    const headerName = safeText(config?.asset_identity?.header_name || "x-ops-asset-id").toLowerCase();
+    const assetId = deriveAssetIdForCurrentOrigin(config);
+    if (assetId) headers.set(headerName, assetId);
 
-    return fetch(url, {
+    // Origin hint
+    headers.set("x-gabo-origin", window.location.origin);
+
+    // Accept JSON response
+    headers.set("accept", "application/json");
+
+    // Merge extra headers
+    if (extraHeaders && typeof extraHeaders === "object") {
+      for (const [k, v] of Object.entries(extraHeaders)) headers.set(String(k), String(v ?? ""));
+    }
+    applyOptionalIntegrityHeader(headers, config);
+
+    // Size hint check (best-effort)
+    const maxBytes = Number(config?.limits?.max_audio_bytes || 12 * 1024 * 1024);
+    if (audioBlob && audioBlob.size > maxBytes) {
+      return new Response(JSON.stringify({ error: "Audio too large" }), {
+        status: 413,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      });
+    }
+
+    return fetch(endpoint, {
       method: "POST",
-      headers: h,
+      headers,
       body: audioBlob,
-      signal: opts?.signal,
+      signal,
       cache: "no-store",
-      redirect: "error",
       credentials: "omit",
+      mode: "cors",
     });
-  }
+  };
 
-  async function postTTS(payload, opts) {
+  const postTTS = async (input, opts) => {
     await init();
-    const cfg = _config;
+    const config = STATE.config;
+    const endpoint = safeText(config.ttsEndpoint) || `${config.gatewayEndpoint}${config.routes.tts || "/api/tts"}`;
 
-    const url = mustString(cfg.ttsEndpoint, "ttsEndpoint");
-    const h = buildRequiredHeaders(opts?.extraHeaders);
+    if (!isAllowedEndpointOrigin(endpoint, config)) {
+      return new Response(JSON.stringify({ error: "Endpoint origin not allowed" }), {
+        status: 403,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      });
+    }
 
-    h.set("content-type", "application/json");
-    h.set("accept", "audio/mpeg,application/octet-stream;q=0.9,*/*;q=0.1");
+    const signal = opts?.signal;
+    const extraHeaders = opts?.extraHeaders || {};
 
-    const text = safeTextOnly(payload?.text || "");
-    const lang = normalizeIso2(payload?.language || payload?.lang_iso2 || "");
+    const text = safeText(input?.text || "");
+    const lang = safeText(input?.language || input?.lang_iso2 || "");
 
-    const body = {
-      text,
-      lang_iso2: lang || undefined,
-    };
+    const payload = { text, lang_iso2: lang || "en" };
+    const bodyText = JSON.stringify(payload);
 
-    return fetch(url, {
+    const headers = new Headers();
+    headers.set("accept", "audio/mpeg");
+    headers.set("content-type", "application/json");
+
+    // Asset identity
+    const headerName = safeText(config?.asset_identity?.header_name || "x-ops-asset-id").toLowerCase();
+    const assetId = deriveAssetIdForCurrentOrigin(config);
+    if (assetId) headers.set(headerName, assetId);
+
+    // Origin hint
+    headers.set("x-gabo-origin", window.location.origin);
+
+    // Merge extras
+    if (extraHeaders && typeof extraHeaders === "object") {
+      for (const [k, v] of Object.entries(extraHeaders)) headers.set(String(k), String(v ?? ""));
+    }
+    applyOptionalIntegrityHeader(headers, config);
+
+    return fetch(endpoint, {
       method: "POST",
-      headers: h,
-      body: JSON.stringify(body),
-      signal: opts?.signal,
+      headers,
+      body: bodyText,
+      signal,
       cache: "no-store",
-      redirect: "error",
       credentials: "omit",
+      mode: "cors",
     });
-  }
+  };
 
   // -------------------------
-  // Expose
+  // Expose API
   // -------------------------
-  window.WorkerClient = Object.freeze({
+  const WorkerClient = {
     init,
     getConfig,
+    getRegistry: () => STATE.registry,
+    getLastError: () => safeText(STATE.lastError),
     postChat,
     postVoiceSTT,
     postTTS,
-  });
+  };
+
+  // Attach
+  window.WorkerClient = WorkerClient;
 })();
