@@ -22,6 +22,7 @@ Set these repository secrets in GitHub:
 ## Turnstile
 
 - Public site key: `0x4AAAAAACf9q_m7LLI2VXXj`
+- Local development fallback key: `1x00000000000000000000AA` (used automatically on localhost to avoid Turnstile domain binding errors).
 - Browser header to Worker: `cf-turnstile-response`
 - Worker validates token against Cloudflare Turnstile API using private secret.
 
