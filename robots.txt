@@ -1,5 +1,81 @@
+# robots.txt — gabos.io / www.gabos.io
+# Policy: default-deny. Only explicitly allowed *search index* bots may crawl.
+# Note: robots.txt is voluntary; enforce real protection with auth/rate-limit/WAF on /api/*.
+
+# -------------------------
+# Default: BLOCK EVERYTHING
+# -------------------------
 User-agent: *
+Disallow: /
+
+# -------------------------
+# Explicit AI/LLM / scraping bots (defense-in-depth; also blocked by default)
+# -------------------------
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: YouBot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+# -------------------------
+# Allowed “acceptable” bots (search indexing only)
+# - They may crawl public pages for SEO
+# - They may NOT crawl your chatbot endpoints
+# -------------------------
+User-agent: Googlebot
+Disallow: /api/
 Allow: /
 
+User-agent: Googlebot-Image
+Disallow: /api/
+Allow: /
+
+User-agent: AdsBot-Google
+Disallow: /api/
+Allow: /
+
+User-agent: Bingbot
+Disallow: /api/
+Allow: /
+
+User-agent: DuckDuckBot
+Disallow: /api/
+Allow: /
+
+User-agent: Slurp
+Disallow: /api/
+Allow: /
+
+User-agent: Applebot
+Disallow: /api/
+Allow: /
+
+# -------------------------
+# Sitemaps
+# -------------------------
 Sitemap: https://gabos.io/sitemap.xml
 Sitemap: https://www.gabos.io/sitemap.xml
