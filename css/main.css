@@ -1,12 +1,16 @@
 /* css/main.css — Gabo UI
  *
  * Security/compliance notes:
- * - Works with CSP: style-src 'self' https://fonts.googleapis.com
- * - Avoids inline styles / javascript: URLs
+ * - CSP-compatible: style-src 'self' https://fonts.googleapis.com
+ * - No inline styles required
+ * - No javascript: URLs
  * - No external images required (uses gradients)
  * - Accessible focus states + reduced motion support
+ * - Avoids embedding remote fonts directly; only uses Google Fonts endpoints already allowlisted
  *
- * Uses CSS variables so adapt_screens.css can override cleanly.
+ * Notes:
+ * - Keep this file served from same-origin as index.html
+ * - If you later add any new external CSS source, update CSP style-src accordingly.
  */
 
 :root {
@@ -50,7 +54,7 @@
   --bubble-user: rgba(16, 163, 127, 0.18);
   --bubble-ai: rgba(255, 255, 255, 0.10);
 
-  /* Background gradient (rotated via JS with --page-gradient) */
+  /* Background gradient (can be rotated by JS by changing --page-gradient) */
   --page-gradient: linear-gradient(
     135deg,
     rgba(187, 247, 208, 0.68) 0%,
@@ -376,7 +380,7 @@ input:focus-visible {
   margin-top: 2px;
 }
 
-/* Honeypot fields (hidden but accessible rules respected) */
+/* Honeypot fields (hidden) */
 .honeypot-field {
   position: absolute !important;
   left: -9999px !important;
