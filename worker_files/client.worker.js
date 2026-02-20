@@ -57,21 +57,34 @@
     } catch {
       return "";
     }
-  }
+  };
 
-  function getAssetIdForOrigin(cfg, origin) {
-    const o = normalizeOrigin(origin);
-    const headerName = toStr(cfg?.asset_identity?.header_name || "x-ops-asset-id").toLowerCase();
-    const map = cfg?.asset_identity?.origin_to_asset_id || {};
-    const direct = map[o] || map[toStr(origin)] || "";
-    return { headerName, assetId: toStr(direct).trim() };
-  }
+  const getConfig = () => ({ ...STATE.config });
 
-  async function fetchJson(url) {
-    const res = await fetch(url, { method: "GET", cache: DEFAULTS.cache, redirect: "follow" });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`Failed to load ${url} (${res.status}): ${txt.slice(0, 180)}`);
+  // -------------------------
+  // Request header builder
+  // -------------------------
+  const buildBaseHeaders = (extra, config) => {
+    const h = new Headers();
+
+    // Required baseline
+    h.set("accept", "text/event-stream");
+    h.set("content-type", "application/json");
+
+    // Asset identity: x-ops-asset-id
+    const headerName = safeText(config?.asset_identity?.header_name || "x-ops-asset-id").toLowerCase();
+    const assetId = deriveAssetIdForCurrentOrigin(config);
+    if (assetId) h.set(headerName, assetId);
+
+
+    // Merge caller-provided headers (case-insensitive merge)
+    if (extra && typeof extra === "object") {
+      for (const [k, v] of Object.entries(extra)) {
+        if (!k) continue;
+        const key = String(k).trim();
+        if (!key) continue;
+        h.set(key, String(v ?? ""));
+      }
     }
     return res.json();
   }
@@ -86,7 +99,7 @@
     const cfg = await fetchJson(abs);
 
     // Normalize minimal fields
-    const assistantEndpoint = cfg.assistantEndpoint || (cfg.workerEndpoint ? `${cfg.workerEndpoint}/api/chat` : "");
+    const assistantEndpoint = cfg.assistantEndpoint || cfg.workerEndpoint ? `${cfg.workerEndpoint}/api/chat` : "";
     const voiceEndpoint = cfg.voiceEndpoint || (cfg.workerEndpoint ? `${cfg.workerEndpoint}/api/voice` : "");
     const ttsEndpoint = cfg.ttsEndpoint || (cfg.workerEndpoint ? `${cfg.workerEndpoint}/api/tts` : "");
     const workerEndpoint = cfg.workerEndpoint || deriveWorkerEndpoint(cfg.assistantEndpoint) || "";
@@ -179,33 +192,33 @@
     } finally {
       if (cancel) cancel();
     }
-  }
 
-  async function postVoiceSTT(audioBlobOrBytes, opts) {
-    if (!_inited) await init();
-    if (!_cfg?.voiceEndpoint) throw new Error("voiceEndpoint not configured.");
+    const signal = opts?.signal;
+    const extraHeaders = opts?.extraHeaders || {};
+    const headers = new Headers();
 
-    const options = opts && typeof opts === "object" ? opts : {};
-    const timeoutMs = Number(options.timeoutMs || DEFAULTS.timeoutMs) || DEFAULTS.timeoutMs;
-    const { signal, cancel } = withTimeout(options.signal, timeoutMs);
+    // Asset identity header (same as chat)
+    const headerName = safeText(config?.asset_identity?.header_name || "x-ops-asset-id").toLowerCase();
+    const assetId = deriveAssetIdForCurrentOrigin(config);
+    if (assetId) headers.set(headerName, assetId);
 
-    const endpoint = _cfg.voiceEndpoint.includes("?")
-      ? `${_cfg.voiceEndpoint}&mode=stt`
-      : `${_cfg.voiceEndpoint}?mode=stt`;
 
-    let body = audioBlobOrBytes;
-    let contentType = "";
+    // Accept JSON response
+    headers.set("accept", "application/json");
 
-    if (audioBlobOrBytes instanceof Blob) {
-      contentType = audioBlobOrBytes.type || "";
-      body = audioBlobOrBytes;
-    } else if (audioBlobOrBytes instanceof ArrayBuffer) {
-      body = new Uint8Array(audioBlobOrBytes);
-      contentType = "application/octet-stream";
-    } else if (audioBlobOrBytes && audioBlobOrBytes.buffer && audioBlobOrBytes.byteLength != null) {
-      // Uint8Array-like
-      contentType = "application/octet-stream";
-      body = audioBlobOrBytes;
+    // Merge extra headers
+    if (extraHeaders && typeof extraHeaders === "object") {
+      for (const [k, v] of Object.entries(extraHeaders)) headers.set(String(k), String(v ?? ""));
+    }
+    applyOptionalIntegrityHeader(headers, config);
+
+    // Size hint check (best-effort)
+    const maxBytes = Number(config?.limits?.max_audio_bytes || 12 * 1024 * 1024);
+    if (audioBlob && audioBlob.size > maxBytes) {
+      return new Response(JSON.stringify({ error: "Audio too large" }), {
+        status: 413,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      });
     }
 
     const base = { accept: "application/json" };
@@ -249,18 +262,10 @@
 
     const headers = buildHeaders(base, options.extraHeaders);
 
-    try {
-      return await fetch(_cfg.ttsEndpoint, {
-        method: "POST",
-        mode: "cors",
-        cache: "no-store",
-        redirect: "follow",
-        signal,
-        headers,
-        body: JSON.stringify({ text, lang_iso2: lang }),
-      });
-    } finally {
-      if (cancel) cancel();
+
+    // Merge extras
+    if (extraHeaders && typeof extraHeaders === "object") {
+      for (const [k, v] of Object.entries(extraHeaders)) headers.set(String(k), String(v ?? ""));
     }
   }
 

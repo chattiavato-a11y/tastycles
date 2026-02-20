@@ -35,5 +35,5 @@
   Cross-Origin-Resource-Policy: cross-origin
   Access-Control-Allow-Origin: *
   Access-Control-Allow-Methods: GET, OPTIONS
-  Access-Control-Allow-Headers: Content-Type, Accept, X-Ops-Asset-Id, X-Ops-Src-Sha512-B64, X-Gabo-Lang-Hint, X-Gabo-Lang-List, X-Gabo-Voice-Language
+  Access-Control-Allow-Headers: Content-Type, Accept, X-Ops-Asset-Id, X-Ops-Src-Sha512-B64, X-Gabo-Origin, X-Gabo-Lang-Hint, X-Gabo-Lang-List, X-Gabo-Voice-Language, X-Gabo-Tinyml-Mode, X-Gabo-Honeypot, X-Gabo-Honeypot-Pre
   Access-Control-Max-Age: 86400
