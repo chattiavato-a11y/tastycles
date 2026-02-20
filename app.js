@@ -68,15 +68,17 @@ const resolveTurnstileSiteKey = () => {
   return configured;
 };
 
-window.onTurnstileSuccess = (token) => {
+let turnstileWidgetId = null;
+
+const onTurnstileSuccess = (token) => {
   turnstileToken = safeTextOnly(token || "");
 };
 
-window.onTurnstileExpired = () => {
+const onTurnstileExpired = () => {
   turnstileToken = "";
 };
 
-window.onTurnstileError = () => {
+const onTurnstileError = () => {
   turnstileToken = "";
 };
 
