@@ -21,7 +21,6 @@
 
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/adapt_screens.css" />
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   <script defer src="worker_files/client.worker.js"></script>
   <script defer src="app.js"></script>
 </head>
@@ -98,16 +97,6 @@
         <button class="send-btn" type="submit" id="send-btn" disabled>Send</button>
         <button class="cancel-btn" type="button" id="cancel-btn" hidden>Cancel</button>
       </form>
-      <div class="turnstile-shell" aria-label="Bot protection challenge">
-        <div
-          class="cf-turnstile"
-          id="turnstile-widget"
-          data-sitekey="0x4AAAAAACf9q_m7LLI2VXXj"
-          data-theme="auto"
-          data-size="flexible"
-          data-retry="never"
-        ></div>
-      </div>
     </footer>
   </main>
 </body>
