@@ -52,6 +52,21 @@ let allowedOrigins = [];
 
 let turnstileSiteKey = "";
 let turnstileToken = "";
+let turnstileWidgetId = "";
+
+const TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000AA";
+
+const isLocalDevHost = () => {
+  const host = String(window.location.hostname || "").toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+};
+
+const resolveTurnstileSiteKey = () => {
+  const configured = safeTextOnly(turnstileSiteKey || "");
+  if (configured && !isLocalDevHost()) return configured;
+  if (isLocalDevHost()) return TURNSTILE_TEST_SITE_KEY;
+  return configured;
+};
 
 let turnstileWidgetId = null;
 
@@ -814,7 +829,8 @@ const getAssetHeaderName = () => normalizeHeaderName(window.OPS_ASSET_HEADER_NAM
 const getTurnstileToken = () => {
   if (window.turnstile?.getResponse) {
     try {
-      const response = window.turnstile.getResponse(turnstileWidgetId ?? undefined);
+      const widgetRef = turnstileWidgetId || "turnstile-widget";
+      const response = window.turnstile.getResponse(widgetRef);
       if (response) return String(response).trim();
     } catch {
       // no-op
@@ -827,7 +843,8 @@ const resetTurnstileToken = () => {
   turnstileToken = "";
   if (window.turnstile?.reset) {
     try {
-      window.turnstile.reset(turnstileWidgetId ?? undefined);
+      const widgetRef = turnstileWidgetId || "turnstile-widget";
+      window.turnstile.reset(widgetRef);
     } catch {
       // no-op
     }
@@ -1330,38 +1347,24 @@ const configureTurnstileWidget = () => {
   const widget = document.getElementById("turnstile-widget");
   if (!widget) return;
 
-  const configured = safeTextOnly(turnstileSiteKey || "");
-  if (configured) widget.setAttribute("data-sitekey", configured);
+  const siteKey = resolveTurnstileSiteKey();
+  if (siteKey) widget.setAttribute("data-sitekey", siteKey);
 
-  if (!window.turnstile?.render || turnstileWidgetId !== null) return;
+  if (!window.turnstile?.render) return;
+  if (turnstileWidgetId) return;
 
   try {
     turnstileWidgetId = window.turnstile.render(widget, {
-      sitekey: configured || widget.getAttribute("data-sitekey") || "",
+      sitekey: siteKey,
       theme: widget.getAttribute("data-theme") || "auto",
       size: widget.getAttribute("data-size") || "flexible",
-      retry: "never",
-      callback: onTurnstileSuccess,
-      "expired-callback": onTurnstileExpired,
-      "error-callback": onTurnstileError,
+      callback: window.onTurnstileSuccess,
+      "expired-callback": window.onTurnstileExpired,
+      "error-callback": window.onTurnstileError,
     });
   } catch (error) {
-    console.warn("Turnstile render failed.", error);
+    console.warn("Turnstile render deferred until API is ready.", error);
   }
-};
-
-const waitForTurnstileAndRender = () => {
-  const maxAttempts = 40;
-  let attempt = 0;
-
-  const tick = () => {
-    configureTurnstileWidget();
-    if (turnstileWidgetId !== null || window.turnstile?.render || attempt >= maxAttempts) return;
-    attempt += 1;
-    window.setTimeout(tick, 100);
-  };
-
-  tick();
 };
 
 // -------------------------
@@ -1369,7 +1372,8 @@ const waitForTurnstileAndRender = () => {
 // -------------------------
 const initApp = async () => {
   await loadCanonicalConfig();
-  waitForTurnstileAndRender();
+  configureTurnstileWidget();
+  setTimeout(configureTurnstileWidget, 250);
 
   // If config loaded but only assistantEndpoint exists, derive worker endpoint
   if (!workerEndpoint && CANONICAL_CONFIG?.assistantEndpoint) {
