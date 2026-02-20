@@ -23,7 +23,8 @@
     "timeouts",
     "limits",
     "cors",
-    "actions_handshake"
+    "actions_handshake",
+    "turnstile"
   ],
   "$defs": {
     "sha512_hex": {
@@ -427,6 +428,33 @@
         "algorithm": {
           "type": "string",
           "const": "shared-secret-header"
+        },
+        "secret_name": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_]{3,80}$"
+        }
+      }
+    },
+    "turnstile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "site_key",
+        "header_name",
+        "required",
+        "secret_name"
+      ],
+      "properties": {
+        "site_key": {
+          "type": "string",
+          "pattern": "^0x4[A-Za-z0-9_-]{20,}$"
+        },
+        "header_name": {
+          "type": "string",
+          "const": "cf-turnstile-response"
+        },
+        "required": {
+          "type": "boolean"
         },
         "secret_name": {
           "type": "string",

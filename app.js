@@ -47,6 +47,21 @@ let workerEndpoint = "";
 let gatewayEndpoint = "";
 let allowedOrigins = [];
 
+let turnstileSiteKey = "";
+let turnstileToken = "";
+
+window.onTurnstileSuccess = (token) => {
+  turnstileToken = safeTextOnly(token || "");
+};
+
+window.onTurnstileExpired = () => {
+  turnstileToken = "";
+};
+
+window.onTurnstileError = () => {
+  turnstileToken = "";
+};
+
 window.OPS_ASSET_BY_ORIGIN = OPS_ASSET_BY_ORIGIN;
 window.OPS_ASSET_ID = OPS_ASSET_ID;
 
@@ -109,6 +124,9 @@ function applyCanonicalConfig(cfg) {
 
   const cfgAllowed = asArray(cfg.allowedOrigins).filter(Boolean);
   if (cfgAllowed.length) allowedOrigins = cfgAllowed;
+
+  const cfgTurnstileSiteKey = safeTextOnly(cfg.turnstile?.site_key || "");
+  if (cfgTurnstileSiteKey) turnstileSiteKey = cfgTurnstileSiteKey;
 
   // Asset identity mapping
   const headerName = normalizeHeaderName(cfg.asset_identity?.header_name || "x-ops-asset-id");
@@ -752,6 +770,35 @@ const buildLanguageHeaders = (language) => {
 
 const getAssetHeaderName = () => normalizeHeaderName(window.OPS_ASSET_HEADER_NAME || CANONICAL_CONFIG?.asset_identity?.header_name || "x-ops-asset-id");
 
+const getTurnstileToken = () => {
+  if (window.turnstile?.getResponse) {
+    try {
+      const response = window.turnstile.getResponse("turnstile-widget");
+      if (response) return String(response).trim();
+    } catch {
+      // no-op
+    }
+  }
+  return String(turnstileToken || "").trim();
+};
+
+const resetTurnstileToken = () => {
+  turnstileToken = "";
+  if (window.turnstile?.reset) {
+    try {
+      window.turnstile.reset("turnstile-widget");
+    } catch {
+      // no-op
+    }
+  }
+};
+
+const ensureTurnstileReady = () => {
+  const token = getTurnstileToken();
+  if (token) return { ok: true, token };
+  return { ok: false, token: "", reason: "turnstile_token_missing" };
+};
+
 const buildHoneypotTelemetry = () => {
   const dynamicPayload = Array.from(dynamicHoneypotFields)
     .map((field) => ({
@@ -767,12 +814,14 @@ const buildHoneypotTelemetry = () => {
   };
 };
 
-const buildSecurityHeaders = (language, integrityB64 = "") => {
+const buildSecurityHeaders = (language, integrityB64 = "", turnstileResponse = "") => {
   const assetHeaderName = getAssetHeaderName();
   const headers = {
     ...buildLanguageHeaders(language),
     "x-ops-src-sha512-b64": integrityB64,
   };
+
+  if (turnstileResponse) headers["cf-turnstile-response"] = String(turnstileResponse).trim();
 
   // Always include asset id (fail-closed if missing)
   if (OPS_ASSET_ID) headers[assetHeaderName] = OPS_ASSET_ID;
@@ -1032,7 +1081,8 @@ async function onMicClick() {
             await stopMicAndTranscribe();
           } catch (error) {
             console.error(error);
-            voiceReplyRequested = false;
+            resetTurnstileToken();
+    voiceReplyRequested = false;
           }
         }
       }, 8000);
@@ -1041,6 +1091,7 @@ async function onMicClick() {
     }
   } catch (error) {
     micRecording = false;
+    resetTurnstileToken();
     voiceReplyRequested = false;
     setMicUI(false);
 
@@ -1114,6 +1165,13 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  const turnstileState = ensureTurnstileReady();
+  if (!turnstileState.ok) {
+    setSecurityMessage("Security validation failed. Complete Turnstile challenge and retry.");
+    addMessage("Please complete the bot-protection challenge before sending.", false);
+    return;
+  }
+
   const sanitizedResult = sanitizeAndValidateMessage(rawMessage);
   if (!sanitizedResult.sanitized || !sanitizedResult.integrityOk || sanitizedResult.initialRisk >= 8) {
     input.value = "";
@@ -1179,7 +1237,7 @@ form.addEventListener("submit", async (event) => {
       },
       {
         signal: controller.signal,
-        extraHeaders: buildSecurityHeaders(getPreferredLanguage(), integrityB64),
+        extraHeaders: buildSecurityHeaders(getPreferredLanguage(), integrityB64, turnstileState.token),
       }
     );
 
@@ -1213,15 +1271,25 @@ form.addEventListener("submit", async (event) => {
     activeAssistantBubble = null;
     setStreamingState(false);
     stopThinking();
+    resetTurnstileToken();
     voiceReplyRequested = false;
   }
 });
+
+
+const configureTurnstileWidget = () => {
+  const widget = document.getElementById("turnstile-widget");
+  if (!widget) return;
+  const configured = safeTextOnly(turnstileSiteKey || "");
+  if (configured) widget.setAttribute("data-sitekey", configured);
+};
 
 // -------------------------
 // Init
 // -------------------------
 const initApp = async () => {
   await loadCanonicalConfig();
+  configureTurnstileWidget();
 
   // If config loaded but only assistantEndpoint exists, derive worker endpoint
   if (!workerEndpoint && CANONICAL_CONFIG?.assistantEndpoint) {
@@ -1243,7 +1311,7 @@ const initApp = async () => {
   if (!OPS_ASSET_ID) {
     setSecurityMessage("Security checks active, but asset identity mapping is missing for this origin.");
   } else {
-    setSecurityMessage("Security checks active (gateway validation + asset identity).");
+    setSecurityMessage("Security checks active (gateway validation + asset identity + Turnstile).");
   }
 };
 

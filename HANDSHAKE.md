@@ -2,24 +2,32 @@
 
 This repository includes a repo-secret handshake job in `.github/workflows/security-integrity.yml`.
 
-## Required repository secret
+## Required repository secrets
 
-Set this repository secret in GitHub:
+Set these repository secrets in GitHub:
 
 - `DRASTIC_MEASURES`
+- `TURNSTILE_SECRET_KEY`
 
-This must match the Cloudflare Worker secret `env.DRASTIC_MEASURES`.
+`DRASTIC_MEASURES` must match the Cloudflare Worker secret `env.DRASTIC_MEASURES`.
+`TURNSTILE_SECRET_KEY` should match the Worker secret used to validate Turnstile tokens server-side.
 
 ## Worker contract this repo now matches
 
-- Path: `/__repo/handshake`
-- Header: `x-gabo-repo-id`
-- Header value: raw shared secret (`DRASTIC_MEASURES`)
-- Algorithm: `shared-secret-header`
+- Repo handshake path: `/__repo/handshake`
+- Repo handshake header: `x-gabo-repo-id`
+- Repo handshake header value: raw shared secret (`DRASTIC_MEASURES`)
+- Repo handshake algorithm: `shared-secret-header`
+
+## Turnstile
+
+- Public site key: `0x4AAAAAACf9q_m7LLI2VXXj`
+- Browser header to Worker: `cf-turnstile-response`
+- Worker validates token against Cloudflare Turnstile API using private secret.
 
 ## Runtime config source
 
-Handshake parameters are defined in `worker_files/worker.config.json` under `actions_handshake`.
+Handshake and Turnstile parameters are defined in `worker_files/worker.config.json`.
 
 ## Verification behavior
 
