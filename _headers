@@ -1,5 +1,13 @@
+# _headers — Security + SEO headers for static site (Cloudflare Pages / similar)
+# Notes:
+# - These headers implement common OWASP secure headers guidance and support strong baseline controls.
+# - "Compliance" (NIST/CISA/PCI) is achieved by the overall control set + process; headers are one part.
+
+# -------------------------
+# Global (all paths)
+# -------------------------
 /*
-  # --- Core Security Headers (Static Site) ---
+  # --- Core hardening ---
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
@@ -7,28 +15,29 @@
   X-DNS-Prefetch-Control: off
   X-Permitted-Cross-Domain-Policies: none
   X-XSS-Protection: 0
-  X-Robots-Tag: index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1
 
-  # --- Cross-Origin Policies ---
+  # --- Clickjacking + isolation policies ---
   Cross-Origin-Resource-Policy: same-site
   Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
 
-  # --- Clickjacking/MIME hardening ---
-  X-Frame-Options: DENY
-  X-Content-Type-Options: nosniff
-
-  # --- Integrity policy (SRI enforcement target for script/style in HTML) ---
-  Integrity-Policy: require-sri-for script style
-
-  # --- Permissions Policy (page-level capabilities) ---
+  # --- Permissions (capabilities) ---
   Permissions-Policy: camera=(), geolocation=(), microphone=(self)
 
-  # --- Content Security Policy (CSP) + SEO bot compatibility ---
+  # --- Robots / preview controls (SEO-safe) ---
+  X-Robots-Tag: index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1
+
+  # --- Subresource Integrity (best-effort; browser support varies) ---
+  Require-SRI-For: script style
+  Integrity-Policy: require-sri-for script style
+
+  # --- Content Security Policy (CSP) ---
+  # Allows: self scripts, self XHR/fetch + your worker + your GH pages host, Google Fonts CSS + font files,
+  # images from self/data/https, audio blobs, web workers from self/blob.
   Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://drastic-measures.rulathemtodos.workers.dev https://chattiavato-a11y.github.io; media-src 'self' blob:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests; block-all-mixed-content
 
+
 # --------------------------------------------------------------------
-# Public JSON assets under /worker_files/ may be fetched by other origins
+# Public JSON/JS assets under /worker_files/ may be fetched by other origins
 # (dash, github pages, etc). Make these explicitly cross-origin readable.
 # --------------------------------------------------------------------
 /worker_files/*
