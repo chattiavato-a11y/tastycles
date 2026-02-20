@@ -759,19 +759,18 @@ const logResponseMeta = (headers) => {
 // Language + headers
 // -------------------------
 const DEFAULT_REQUEST_META = {
-  reply_format: "paragraph",
-  tone: "friendly",
+  model: "quality",
   spanish_quality: "king",
-  model_tier: "quality",
-  language_mode: "auto",
+  want_embeddings: false,
+  tinyml_mode: "strict",
 };
 
 const getLanguageMeta = () => {
   const languages = Array.isArray(navigator.languages) ? navigator.languages.filter(Boolean) : [];
   const primary = navigator.language || languages[0] || "";
   return {
-    language_hint: primary,
-    language_list: languages,
+    lang_iso2: String(primary || "").slice(0, 2).toLowerCase(),
+    translate_to: "same",
   };
 };
 
@@ -1210,20 +1209,8 @@ form.addEventListener("submit", async (event) => {
       {
         messages: buildMessages(message),
         meta: {
-          source: "gabo-ui",
-          currentUrl: window.location.href,
-          allowedOrigins,
           ...DEFAULT_REQUEST_META,
           ...getLanguageMeta(),
-          voice_language: lastVoiceLanguage || undefined,
-          security: {
-            tiny_ml_risk: sanitizedResult.initialRisk,
-            tiny_ml_risk_post_sanitize: sanitizedResult.finalRisk,
-            integrity_check: sanitizedResult.integrityOk,
-            integrity_sha512_b64: integrityB64 || undefined,
-            honeypot_clear: true,
-          },
-          honeypot: buildHoneypotTelemetry(),
         },
       },
       {
