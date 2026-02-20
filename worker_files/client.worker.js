@@ -270,8 +270,6 @@
     const assetId = deriveAssetIdForCurrentOrigin(config);
     if (assetId) h.set(headerName, assetId);
 
-    // Forward UI origin hint for Gateway optional usage
-    h.set("x-gabo-origin", window.location.origin);
 
     // Merge caller-provided headers (case-insensitive merge)
     if (extra && typeof extra === "object") {
@@ -420,8 +418,6 @@
     const assetId = deriveAssetIdForCurrentOrigin(config);
     if (assetId) headers.set(headerName, assetId);
 
-    // Origin hint
-    headers.set("x-gabo-origin", window.location.origin);
 
     // Accept JSON response
     headers.set("accept", "application/json");
@@ -482,8 +478,6 @@
     const assetId = deriveAssetIdForCurrentOrigin(config);
     if (assetId) headers.set(headerName, assetId);
 
-    // Origin hint
-    headers.set("x-gabo-origin", window.location.origin);
 
     // Merge extras
     if (extraHeaders && typeof extraHeaders === "object") {
