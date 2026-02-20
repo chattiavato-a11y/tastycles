@@ -74,7 +74,8 @@
       "x-gabo-voice-language",
       "x-gabo-tinyml-mode",
       "x-gabo-honeypot",
-      "x-gabo-honeypot-pre"
+      "x-gabo-honeypot-pre",
+      "cf-turnstile-response"
     ],
     "expose_headers": [
       "x-gabo-stt-iso2",
