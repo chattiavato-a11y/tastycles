@@ -1,4 +1,14 @@
 {
+  "registry": {
+    "name": "gabo-asset-registry",
+    "version": "v1",
+    "generated_at": "2026-02-20T00:00:00Z",
+    "digest_format": "sha512-hex-128",
+    "notes": [
+      "asset_id values are lowercase sha512 hex (128 chars).",
+      "This file is PUBLIC and intended to be fetchable cross-origin under /worker_files/."
+    ]
+  },
   "assets": [
     {
       "asset_id": "96dd27ea493d045ed9b46d72533e2ed2ec897668e2227dd3d79fff85ca2216a569c4bf622790c6fb0aab9f17b4e92d0f8e0fa040356bee68a9c3d50d5a60c945",
@@ -107,13 +117,14 @@
       "display_name": "Chattia Vato GitHub Pages Origin",
       "classification": "public",
       "source": {
-        "origin_url": "https://chattiavato-a11y.github.io/tastycles/",
+        "origin_url": "https://chattiavato-a11y.github.io",
         "repository": "tastycles",
         "path": "worker_files/worker.assets.json#origin-chattiavato",
-        "version": "v1"
+        "version": "v1",
+        "path_prefix_hint": "/tastycles/"
       },
       "serving": {
-        "primary_url": "https://chattiavato-a11y.github.io/tastycles/",
+        "primary_url": "https://chattiavato-a11y.github.io",
         "cache_ttl_seconds": 300
       },
       "policy": {
@@ -136,6 +147,6 @@
   ],
   "notes": [
     "integrity.sha512 omitted because asset_id already equals the sha512 (single-source).",
-    "fallback_url omitted where it equals primary_url."
+    "Origins are stored without paths; if a site is served from a subpath, use source.path_prefix_hint as a human hint only."
   ]
 }
