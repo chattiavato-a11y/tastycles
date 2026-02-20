@@ -100,7 +100,7 @@
     "strict_transport_security": "max-age=31536000; includeSubDomains; preload",
     "cross_origin_resource_policy": "same-site",
     "cross_origin_opener_policy": "same-origin",
-    "content_security_policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://drastic-measures.rulathemtodos.workers.dev https://chattiavato-a11y.github.io; media-src 'self' blob:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests; block-all-mixed-content"
+    "content_security_policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://drastic-measures.rulathemtodos.workers.dev https://chattiavato-a11y.github.io https://challenges.cloudflare.com; media-src 'self' blob:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests; block-all-mixed-content"
   },
   "seo": {
     "robots_index": true,
@@ -116,5 +116,18 @@
     "request_header": "x-ops-src-sha512-b64",
     "require_subresource_integrity": true,
     "notes": "Apply integrity attributes to external CDN resources in HTML templates."
+  },
+  "actions_handshake": {
+    "ready": true,
+    "path": "/__repo/handshake",
+    "header_name": "x-gabo-repo-id",
+    "algorithm": "shared-secret-header",
+    "secret_name": "DRASTIC_MEASURES"
+  },
+  "turnstile": {
+    "site_key": "0x4AAAAAACf9q_m7LLI2VXXj",
+    "header_name": "cf-turnstile-response",
+    "required": true,
+    "secret_name": "TURNSTILE_SECRET_KEY"
   }
 }
