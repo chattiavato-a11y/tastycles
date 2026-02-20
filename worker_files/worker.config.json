@@ -116,5 +116,12 @@
     "request_header": "x-ops-src-sha512-b64",
     "require_subresource_integrity": true,
     "notes": "Apply integrity attributes to external CDN resources in HTML templates."
+  },
+  "actions_handshake": {
+    "ready": true,
+    "path": "/__repo/handshake",
+    "header_name": "x-gabo-repo-id",
+    "algorithm": "shared-secret-header",
+    "secret_name": "DRASTIC_MEASURES"
   }
 }

@@ -1,0 +1,55 @@
+name: security-integrity
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - work
+  workflow_dispatch:
+
+jobs:
+  scan-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate JSON shape
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('worker_files/worker.config.json','utf8')); JSON.parse(require('fs').readFileSync('worker_files/worker.config.schema.json','utf8'));"
+
+      - name: Run security + integrity scan
+        run: node scripts/security-integrity-check.mjs
+
+  cf-worker-handshake:
+    runs-on: ubuntu-latest
+    needs: scan-and-validate
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify handshake secret presence
+        env:
+          DRASTIC_MEASURES: ${{ secrets.DRASTIC_MEASURES }}
+        run: |
+          if [ -z "$DRASTIC_MEASURES" ]; then
+            echo "Missing DRASTIC_MEASURES secret in repository settings."
+            exit 1
+          fi
+
+      - name: Perform repo secret handshake with Cloudflare Worker
+        env:
+          DRASTIC_MEASURES: ${{ secrets.DRASTIC_MEASURES }}
+        run: node scripts/cf-worker-handshake.mjs

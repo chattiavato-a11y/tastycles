@@ -22,7 +22,8 @@
     "routes",
     "timeouts",
     "limits",
-    "cors"
+    "cors",
+    "actions_handshake"
   ],
   "$defs": {
     "sha512_hex": {
@@ -400,6 +401,36 @@
           "type": "string",
           "minLength": 4,
           "maxLength": 300
+        }
+      }
+    },
+    "actions_handshake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ready",
+        "path",
+        "header_name",
+        "algorithm",
+        "secret_name"
+      ],
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        },
+        "path": {
+          "$ref": "#/$defs/path_route"
+        },
+        "header_name": {
+          "$ref": "#/$defs/header_name"
+        },
+        "algorithm": {
+          "type": "string",
+          "const": "shared-secret-header"
+        },
+        "secret_name": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_]{3,80}$"
         }
       }
     }
