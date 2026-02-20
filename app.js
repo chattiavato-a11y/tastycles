@@ -50,37 +50,6 @@ let workerEndpoint = "";
 let gatewayEndpoint = "";
 let allowedOrigins = [];
 
-let turnstileSiteKey = "";
-let turnstileToken = "";
-let turnstileWidgetId = "";
-
-const TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000AA";
-
-const isLocalDevHost = () => {
-  const host = String(window.location.hostname || "").toLowerCase();
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
-};
-
-const resolveTurnstileSiteKey = () => {
-  const configured = safeTextOnly(turnstileSiteKey || "");
-  if (configured && !isLocalDevHost()) return configured;
-  if (isLocalDevHost()) return TURNSTILE_TEST_SITE_KEY;
-  return configured;
-};
-
-let turnstileWidgetId = null;
-
-const onTurnstileSuccess = (token) => {
-  turnstileToken = safeTextOnly(token || "");
-};
-
-const onTurnstileExpired = () => {
-  turnstileToken = "";
-};
-
-const onTurnstileError = () => {
-  turnstileToken = "";
-};
 
 window.OPS_ASSET_BY_ORIGIN = OPS_ASSET_BY_ORIGIN;
 window.OPS_ASSET_ID = OPS_ASSET_ID;
@@ -145,8 +114,6 @@ function applyCanonicalConfig(cfg) {
   const cfgAllowed = asArray(cfg.allowedOrigins).filter(Boolean);
   if (cfgAllowed.length) allowedOrigins = cfgAllowed;
 
-  const cfgTurnstileSiteKey = safeTextOnly(cfg.turnstile?.site_key || "");
-  if (cfgTurnstileSiteKey) turnstileSiteKey = cfgTurnstileSiteKey;
 
   // Asset identity mapping
   const headerName = normalizeHeaderName(cfg.asset_identity?.header_name || "x-ops-asset-id");
@@ -826,37 +793,6 @@ const buildLanguageHeaders = (language) => {
 
 const getAssetHeaderName = () => normalizeHeaderName(window.OPS_ASSET_HEADER_NAME || CANONICAL_CONFIG?.asset_identity?.header_name || "x-ops-asset-id");
 
-const getTurnstileToken = () => {
-  if (window.turnstile?.getResponse) {
-    try {
-      const widgetRef = turnstileWidgetId || "turnstile-widget";
-      const response = window.turnstile.getResponse(widgetRef);
-      if (response) return String(response).trim();
-    } catch {
-      // no-op
-    }
-  }
-  return String(turnstileToken || "").trim();
-};
-
-const resetTurnstileToken = () => {
-  turnstileToken = "";
-  if (window.turnstile?.reset) {
-    try {
-      const widgetRef = turnstileWidgetId || "turnstile-widget";
-      window.turnstile.reset(widgetRef);
-    } catch {
-      // no-op
-    }
-  }
-};
-
-const ensureTurnstileReady = () => {
-  const token = getTurnstileToken();
-  if (token) return { ok: true, token };
-  return { ok: false, token: "", reason: "turnstile_token_missing" };
-};
-
 const buildHoneypotTelemetry = () => {
   const dynamicPayload = Array.from(dynamicHoneypotFields)
     .map((field) => ({
@@ -872,14 +808,13 @@ const buildHoneypotTelemetry = () => {
   };
 };
 
-const buildSecurityHeaders = (language, integrityB64 = "", turnstileResponse = "") => {
+const buildSecurityHeaders = (language, integrityB64 = "") => {
   const assetHeaderName = getAssetHeaderName();
   const headers = {
     ...buildLanguageHeaders(language),
     "x-ops-src-sha512-b64": integrityB64,
   };
 
-  if (turnstileResponse) headers["cf-turnstile-response"] = String(turnstileResponse).trim();
 
   // Always include asset id (fail-closed if missing)
   if (OPS_ASSET_ID) headers[assetHeaderName] = OPS_ASSET_ID;
@@ -1139,7 +1074,6 @@ async function onMicClick() {
             await stopMicAndTranscribe();
           } catch (error) {
             console.error(error);
-            resetTurnstileToken();
     voiceReplyRequested = false;
           }
         }
@@ -1149,7 +1083,6 @@ async function onMicClick() {
     }
   } catch (error) {
     micRecording = false;
-    resetTurnstileToken();
     voiceReplyRequested = false;
     setMicUI(false);
 
@@ -1231,12 +1164,6 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  const turnstileState = ensureTurnstileReady();
-  if (!turnstileState.ok) {
-    setSecurityMessage("Security validation failed. Complete Turnstile challenge and retry.");
-    addMessage("Please complete the bot-protection challenge before sending.", false);
-    return;
-  }
 
   const sanitizedResult = sanitizeAndValidateMessage(rawMessage);
   if (!sanitizedResult.sanitized || !sanitizedResult.integrityOk || sanitizedResult.initialRisk >= 8) {
@@ -1303,7 +1230,7 @@ form.addEventListener("submit", async (event) => {
       },
       {
         signal: controller.signal,
-        extraHeaders: buildSecurityHeaders(getPreferredLanguage(), integrityB64, turnstileState.token),
+        extraHeaders: buildSecurityHeaders(getPreferredLanguage(), integrityB64),
       }
     );
 
@@ -1337,44 +1264,16 @@ form.addEventListener("submit", async (event) => {
     activeAssistantBubble = null;
     setStreamingState(false);
     stopThinking();
-    resetTurnstileToken();
     voiceReplyRequested = false;
   }
 });
 
-
-const configureTurnstileWidget = () => {
-  const widget = document.getElementById("turnstile-widget");
-  if (!widget) return;
-
-  const siteKey = resolveTurnstileSiteKey();
-  if (siteKey) widget.setAttribute("data-sitekey", siteKey);
-
-  if (!window.turnstile?.render) return;
-  if (turnstileWidgetId) return;
-
-  try {
-    turnstileWidgetId = window.turnstile.render(widget, {
-      sitekey: siteKey,
-      theme: widget.getAttribute("data-theme") || "auto",
-      size: widget.getAttribute("data-size") || "flexible",
-      callback: window.onTurnstileSuccess,
-      "expired-callback": window.onTurnstileExpired,
-      "error-callback": window.onTurnstileError,
-    });
-  } catch (error) {
-    console.warn("Turnstile render deferred until API is ready.", error);
-  }
-};
 
 // -------------------------
 // Init
 // -------------------------
 const initApp = async () => {
   await loadCanonicalConfig();
-  configureTurnstileWidget();
-  setTimeout(configureTurnstileWidget, 250);
-
   // If config loaded but only assistantEndpoint exists, derive worker endpoint
   if (!workerEndpoint && CANONICAL_CONFIG?.assistantEndpoint) {
     const derived = deriveWorkerEndpoint(CANONICAL_CONFIG.assistantEndpoint);
@@ -1395,7 +1294,7 @@ const initApp = async () => {
   if (!OPS_ASSET_ID) {
     setSecurityMessage("Security checks active, but asset identity mapping is missing for this origin.");
   } else {
-    setSecurityMessage("Security checks active (gateway validation + asset identity + Turnstile).");
+    setSecurityMessage("Security checks active (gateway validation + asset identity).");
   }
 };
 

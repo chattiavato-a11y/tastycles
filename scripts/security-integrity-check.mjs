@@ -72,20 +72,7 @@ function ensureConfigIntegrity() {
     findings.push({ file: cfgPath, id: "actions_handshake_header_mismatch", severity: "high", message: "actions_handshake.header_name must be x-gabo-repo-id to match gateway worker." });
   }
 
-  const turnstile = cfg.turnstile;
-  if (!turnstile || typeof turnstile !== "object") {
-    findings.push({ file: cfgPath, id: "turnstile_missing", severity: "high", message: "turnstile configuration block is missing." });
-  } else {
-    if (String(turnstile.header_name || "").toLowerCase() !== "cf-turnstile-response") {
-      findings.push({ file: cfgPath, id: "turnstile_header_mismatch", severity: "high", message: "turnstile.header_name must be cf-turnstile-response." });
-    }
-    if (!String(turnstile.site_key || "").startsWith("0x4")) {
-      findings.push({ file: cfgPath, id: "turnstile_site_key_invalid", severity: "high", message: "turnstile.site_key must look like a Cloudflare Turnstile site key." });
-    }
-    if (!String(turnstile.secret_name || "").trim()) {
-      findings.push({ file: cfgPath, id: "turnstile_secret_name_missing", severity: "high", message: "turnstile.secret_name is required." });
-    }
-  }
+
 }
 
 walk(ROOT);
