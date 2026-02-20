@@ -53,15 +53,17 @@ let allowedOrigins = [];
 let turnstileSiteKey = "";
 let turnstileToken = "";
 
-window.onTurnstileSuccess = (token) => {
+let turnstileWidgetId = null;
+
+const onTurnstileSuccess = (token) => {
   turnstileToken = safeTextOnly(token || "");
 };
 
-window.onTurnstileExpired = () => {
+const onTurnstileExpired = () => {
   turnstileToken = "";
 };
 
-window.onTurnstileError = () => {
+const onTurnstileError = () => {
   turnstileToken = "";
 };
 
@@ -812,7 +814,7 @@ const getAssetHeaderName = () => normalizeHeaderName(window.OPS_ASSET_HEADER_NAM
 const getTurnstileToken = () => {
   if (window.turnstile?.getResponse) {
     try {
-      const response = window.turnstile.getResponse("turnstile-widget");
+      const response = window.turnstile.getResponse(turnstileWidgetId ?? undefined);
       if (response) return String(response).trim();
     } catch {
       // no-op
@@ -825,7 +827,7 @@ const resetTurnstileToken = () => {
   turnstileToken = "";
   if (window.turnstile?.reset) {
     try {
-      window.turnstile.reset("turnstile-widget");
+      window.turnstile.reset(turnstileWidgetId ?? undefined);
     } catch {
       // no-op
     }
@@ -1327,8 +1329,39 @@ form.addEventListener("submit", async (event) => {
 const configureTurnstileWidget = () => {
   const widget = document.getElementById("turnstile-widget");
   if (!widget) return;
+
   const configured = safeTextOnly(turnstileSiteKey || "");
   if (configured) widget.setAttribute("data-sitekey", configured);
+
+  if (!window.turnstile?.render || turnstileWidgetId !== null) return;
+
+  try {
+    turnstileWidgetId = window.turnstile.render(widget, {
+      sitekey: configured || widget.getAttribute("data-sitekey") || "",
+      theme: widget.getAttribute("data-theme") || "auto",
+      size: widget.getAttribute("data-size") || "flexible",
+      retry: "never",
+      callback: onTurnstileSuccess,
+      "expired-callback": onTurnstileExpired,
+      "error-callback": onTurnstileError,
+    });
+  } catch (error) {
+    console.warn("Turnstile render failed.", error);
+  }
+};
+
+const waitForTurnstileAndRender = () => {
+  const maxAttempts = 40;
+  let attempt = 0;
+
+  const tick = () => {
+    configureTurnstileWidget();
+    if (turnstileWidgetId !== null || window.turnstile?.render || attempt >= maxAttempts) return;
+    attempt += 1;
+    window.setTimeout(tick, 100);
+  };
+
+  tick();
 };
 
 // -------------------------
@@ -1336,7 +1369,7 @@ const configureTurnstileWidget = () => {
 // -------------------------
 const initApp = async () => {
   await loadCanonicalConfig();
-  configureTurnstileWidget();
+  waitForTurnstileAndRender();
 
   // If config loaded but only assistantEndpoint exists, derive worker endpoint
   if (!workerEndpoint && CANONICAL_CONFIG?.assistantEndpoint) {

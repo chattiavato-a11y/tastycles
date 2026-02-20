@@ -21,7 +21,7 @@
 
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/adapt_screens.css" />
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   <script defer src="worker_files/client.worker.js"></script>
   <script defer src="app.js"></script>
 </head>
@@ -105,9 +105,7 @@
           data-sitekey="0x4AAAAAACf9q_m7LLI2VXXj"
           data-theme="auto"
           data-size="flexible"
-          data-callback="onTurnstileSuccess"
-          data-expired-callback="onTurnstileExpired"
-          data-error-callback="onTurnstileError"
+          data-retry="never"
         ></div>
       </div>
     </footer>
