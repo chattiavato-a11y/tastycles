@@ -62,9 +62,11 @@
       "accept",
       "x-ops-asset-id",
       "x-ops-src-sha512-b64",
+      "x-gabo-origin",
       "x-gabo-lang-hint",
       "x-gabo-lang-list",
       "x-gabo-voice-language",
+      "x-gabo-tinyml-mode",
       "x-gabo-honeypot",
       "x-gabo-honeypot-pre"
     ],
