@@ -793,20 +793,6 @@ const buildLanguageHeaders = (language) => {
   };
 };
 
-const getTurnstileToken = () => {
-  const hiddenField = document.getElementById("cf-turnstile-response");
-  const hiddenToken = safeTextOnly(hiddenField?.value || "");
-  if (hiddenToken) return hiddenToken;
-
-  if (window.turnstile?.getResponse) {
-    const widgetId = safeTextOnly(window.CF_TURNSTILE_WIDGET_ID || "");
-    const widgetToken = safeTextOnly(window.turnstile.getResponse(widgetId || undefined) || "");
-    if (widgetToken) return widgetToken;
-  }
-
-  return "";
-};
-
 const getAssetHeaderName = () => normalizeHeaderName(window.OPS_ASSET_HEADER_NAME || CANONICAL_CONFIG?.asset_identity?.header_name || "x-ops-asset-id");
 
 const buildHoneypotTelemetry = () => {
@@ -1224,7 +1210,6 @@ form.addEventListener("submit", async (event) => {
   try {
     if (!window.WorkerClient?.postChat) throw new Error("Worker client module is not loaded.");
 
-    const turnstileToken = getTurnstileToken();
     const payload = {
       messages: buildMessages(message),
       meta: {
@@ -1234,10 +1219,6 @@ form.addEventListener("submit", async (event) => {
     };
 
     const extraHeaders = buildSecurityHeaders(getPreferredLanguage(), integrityB64);
-    if (turnstileToken) {
-      payload["cf-turnstile-response"] = turnstileToken;
-      extraHeaders["cf-turnstile-response"] = turnstileToken;
-    }
 
     const response = await window.WorkerClient.postChat(
       payload,
