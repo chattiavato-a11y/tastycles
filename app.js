@@ -14,6 +14,9 @@ const cancelBtn = document.getElementById("cancel-btn");
 
 const HONEYPOT_DYNAMIC_ATTR = "data-gabo-honeypot";
 const HONEYPOT_DYNAMIC_VALUE_ATTR = "data-gabo-honeypot-value";
+const HONEYPOT_LOCK_KEY = "gabo_honeypot_locked";
+
+let honeypotLocked = false;
 
 const hideHoneypotField = (field) => {
   if (!field) return;
@@ -412,9 +415,42 @@ const setSecurityMessage = (text) => {
   voiceHelper.textContent = text || "";
 };
 
+const setHoneypotLocked = (locked) => {
+  honeypotLocked = Boolean(locked);
+  try {
+    if (honeypotLocked) sessionStorage.setItem(HONEYPOT_LOCK_KEY, "1");
+    else sessionStorage.removeItem(HONEYPOT_LOCK_KEY);
+  } catch {}
+};
+
+const engageHoneypotLockdown = (reason = "") => {
+  setHoneypotLocked(true);
+  if (input) {
+    input.value = "";
+    input.readOnly = true;
+    input.disabled = true;
+    input.placeholder = "Blocked by security checks.";
+  }
+  if (sendBtn) sendBtn.disabled = true;
+  if (micBtn) micBtn.disabled = true;
+  if (cancelBtn) cancelBtn.disabled = true;
+
+  if (honeypotField) honeypotField.value = "";
+  if (preHoneypotField) preHoneypotField.value = "";
+  dynamicHoneypotFields.forEach((field) => {
+    if (field) field.value = "";
+  });
+
+  setSecurityMessage("Security lock enabled. Suspicious automation blocked.");
+  if (reason) console.warn("Honeypot lockdown enabled:", reason);
+};
+
 const registerDynamicHoneypotField = (field) => {
   if (!field) return;
   dynamicHoneypotFields.add(field);
+  field.addEventListener("input", () => {
+    if (String(field.value || "").trim()) engageHoneypotLockdown("dynamic honeypot populated");
+  });
   field.addEventListener("input", updateSendState);
 };
 
@@ -466,9 +502,12 @@ const stopThinking = () => {
 const updateSendState = () => {
   const hasText = input.value.trim().length > 0;
   const honeypotTripped = Boolean(honeypotField?.value?.trim() || preHoneypotField?.value?.trim());
-  sendBtn.disabled = isStreaming || !hasText || honeypotTripped;
-  if (input) input.readOnly = false;
-  if (micBtn) micBtn.disabled = false;
+  sendBtn.disabled = honeypotLocked || isStreaming || !hasText || honeypotTripped;
+  if (input) {
+    input.readOnly = honeypotLocked;
+    input.disabled = honeypotLocked;
+  }
+  if (micBtn) micBtn.disabled = honeypotLocked;
 };
 
 const updateCancelState = () => {
@@ -1075,7 +1114,17 @@ document.addEventListener("DOMContentLoaded", () => {
 input.addEventListener("input", updateSendState);
 honeypotField?.addEventListener("input", updateSendState);
 preHoneypotField?.addEventListener("input", updateSendState);
+honeypotField?.addEventListener("input", () => {
+  if (String(honeypotField.value || "").trim()) engageHoneypotLockdown("website honeypot populated");
+});
+preHoneypotField?.addEventListener("input", () => {
+  if (String(preHoneypotField.value || "").trim()) engageHoneypotLockdown("contact honeypot populated");
+});
 installDynamicHoneypots();
+
+try {
+  if (sessionStorage.getItem(HONEYPOT_LOCK_KEY) === "1") engageHoneypotLockdown("persisted session lock");
+} catch {}
 
 input.addEventListener("focus", () => {
   chatLog.scrollTop = chatLog.scrollHeight;
@@ -1085,6 +1134,10 @@ const buildMessages = (message) => [{ role: "user", content: message }];
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (honeypotLocked) {
+    setSecurityMessage("Security lock enabled. Reload to start a new session.");
+    return;
+  }
   const rawMessage = input.value.trim();
   if (!rawMessage || isStreaming) return;
 
@@ -1103,14 +1156,8 @@ form.addEventListener("submit", async (event) => {
       dynamicRisk: honeypotCheck.dynamicRisk,
       dynamicCount: honeypotCheck.dynamicValues.length,
     });
-    input.value = "";
-    if (honeypotField) honeypotField.value = "";
-    if (preHoneypotField) preHoneypotField.value = "";
-    dynamicHoneypotFields.forEach((field) => {
-      if (field) field.value = "";
-    });
+    engageHoneypotLockdown("submit honeypot check failed");
     updateSendState();
-    setSecurityMessage("Security validation failed. Request blocked.");
     return;
   }
 
