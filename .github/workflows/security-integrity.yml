@@ -40,10 +40,11 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Verify handshake + Turnstile secret presence
+      - name: Verify handshake + Turnstile secrets/variables presence
         env:
           DRASTIC_MEASURES: ${{ secrets.DRASTIC_MEASURES }}
           TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          TURNSTILE_tastycles: ${{ vars.TURNSTILE_tastycles }}
         run: |
           if [ -z "$DRASTIC_MEASURES" ]; then
             echo "Missing DRASTIC_MEASURES secret in repository settings."
@@ -51,6 +52,14 @@ jobs:
           fi
           if [ -z "$TURNSTILE_SECRET_KEY" ]; then
             echo "Missing TURNSTILE_SECRET_KEY secret in repository settings."
+            exit 1
+          fi
+          if [ -z "$TURNSTILE_tastycles" ]; then
+            echo "Missing TURNSTILE_tastycles variable in repository settings."
+            exit 1
+          fi
+          if [ "$TURNSTILE_tastycles" != "0x4AAAAAACf9q_m7LLI2VXXj" ]; then
+            echo "TURNSTILE_tastycles variable does not match expected public site key."
             exit 1
           fi
 

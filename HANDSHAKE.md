@@ -12,6 +12,12 @@ Set these repository secrets in GitHub:
 `DRASTIC_MEASURES` must match the Cloudflare Worker secret `env.DRASTIC_MEASURES`.
 `TURNSTILE_SECRET_KEY` should match the Worker secret used to validate Turnstile tokens server-side.
 
+## Required repository variables (public)
+
+Set this repository variable in GitHub:
+
+- `TURNSTILE_tastycles=0x4AAAAAACf9q_m7LLI2VXXj`
+
 ## Worker contract this repo now matches
 
 - Repo handshake path: `/__repo/handshake`
