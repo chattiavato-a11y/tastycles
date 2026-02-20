@@ -798,9 +798,6 @@ const getTurnstileToken = () => {
   const hiddenToken = safeTextOnly(hiddenField?.value || "");
   if (hiddenToken) return hiddenToken;
 
-  const globalToken = safeTextOnly(window.CF_TURNSTILE_TOKEN || "");
-  if (globalToken) return globalToken;
-
   if (window.turnstile?.getResponse) {
     const widgetId = safeTextOnly(window.CF_TURNSTILE_WIDGET_ID || "");
     const widgetToken = safeTextOnly(window.turnstile.getResponse(widgetId || undefined) || "");
