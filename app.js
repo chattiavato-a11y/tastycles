@@ -784,10 +784,8 @@ const getPreferredLanguage = () =>
   "";
 
 const buildLanguageHeaders = (language) => {
-  const languages = Array.isArray(navigator.languages) ? navigator.languages.filter(Boolean) : [];
   return {
     "x-gabo-lang-hint": language || "",
-    "x-gabo-lang-list": languages.join(","),
   };
 };
 
