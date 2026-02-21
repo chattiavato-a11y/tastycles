@@ -207,12 +207,16 @@ function buildCfg(env) {
     if (o && id) originToAsset[o] = id;
   }
 
-  // Allowed origins: config.allowedOrigins OR keys(originToAsset) OR fallback list
-  let allowedList = Array.isArray(cfg0.allowedOrigins) ? cfg0.allowedOrigins : [];
-  if (!allowedList.length) allowedList = Object.keys(originToAsset);
-  if (!allowedList.length) allowedList = FALLBACK_ALLOWED_ORIGINS;
-
-  const allowedOrigins = new Set(allowedList.map(normalizeOrigin).filter(Boolean));
+  // Allowed origins: always union config + origin map keys + hard fallback list
+  // (prevents accidental CORS lockout when env config is partial)
+  const allowedOrigins = new Set();
+  const configuredAllowed = Array.isArray(cfg0.allowedOrigins) ? cfg0.allowedOrigins : [];
+  const mapAllowed = Object.keys(originToAsset);
+  const fallbackAllowed = FALLBACK_ALLOWED_ORIGINS;
+  for (const candidate of [...configuredAllowed, ...mapAllowed, ...fallbackAllowed]) {
+    const o = normalizeOrigin(candidate);
+    if (o) allowedOrigins.add(o);
+  }
 
   // If still empty (should never happen), force fallback
   if (!allowedOrigins.size) {
