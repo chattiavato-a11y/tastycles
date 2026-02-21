@@ -24,6 +24,7 @@
   <script defer src="worker_files/client.worker.js"></script>
   <script defer src="app.js"></script>
 </head>
+
 <body>
   <main class="chat-app" aria-label="Gabo chat interface">
     <header class="chat-header">
@@ -53,6 +54,7 @@
 
     <footer class="chat-footer">
       <form id="chat-form" class="input-shell" autocomplete="off">
+        <!-- Honeypot 1 -->
         <label class="honeypot-field" for="contact-field" aria-hidden="true">Leave this field empty</label>
         <input
           id="contact-field"
@@ -63,6 +65,7 @@
           autocomplete="off"
           aria-hidden="true"
         />
+
         <input
           id="msgInput"
           type="text"
@@ -71,6 +74,8 @@
           aria-label="Type your message"
           required
         />
+
+        <!-- Honeypot 2 -->
         <label class="honeypot-field" for="website-field" aria-hidden="true">Leave this field empty</label>
         <input
           id="website-field"
@@ -81,7 +86,9 @@
           autocomplete="off"
           aria-hidden="true"
         />
+
         <span id="voice-helper" class="voice-helper" aria-live="polite"></span>
+
         <button id="micBtn" type="button" aria-label="Voice reply" aria-pressed="false">
           <svg class="voice-wave-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
             <rect x="4" y="6" width="40" height="36" rx="10" fill="currentColor" />
@@ -94,6 +101,7 @@
             </g>
           </svg>
         </button>
+
         <button class="send-btn" type="submit" id="send-btn" disabled>Send</button>
         <button class="cancel-btn" type="button" id="cancel-btn" hidden>Cancel</button>
       </form>
