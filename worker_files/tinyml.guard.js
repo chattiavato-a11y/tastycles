@@ -424,7 +424,6 @@
     const stableJson = stableStringify(out);
     const integrityB64 = wantIntegrity ? await sha512Base64(stableJson) : "";
     const extraHeaders = {};
-    if (integrityB64) extraHeaders["x-ops-src-sha512-b64"] = integrityB64;
 
     const repoHeader = buildRepoIdentityHeader(options.repoHeaderName || "x-gabo-repo-id");
     if (repoHeader) {
