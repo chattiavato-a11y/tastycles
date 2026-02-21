@@ -40,16 +40,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Verify handshake secret presence
+      - name: Repo ↔ Worker handshake
         env:
           DRASTIC_MEASURES: ${{ secrets.DRASTIC_MEASURES }}
-        run: |
-          if [ -z "$DRASTIC_MEASURES" ]; then
-            echo "Missing DRASTIC_MEASURES secret in repository settings."
-            exit 1
-          fi
-
-      - name: Perform repo secret handshake with Cloudflare Worker
-        env:
-          DRASTIC_MEASURES: ${{ secrets.DRASTIC_MEASURES }}
-        run: node scripts/cf-worker-handshake.mjs
+        run: node scripts/cf-worker-communication.mjs --action handshake

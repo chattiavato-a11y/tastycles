@@ -346,7 +346,7 @@ const applyTranslations = () => {
 };
 
 const INTRO_I18N_KEYS = ["welcome", "startConversation", "introCopy"];
-const INTRO_ROTATION_LOCALES = ["es", "pt", "en", "fr", "de", "fr", "tl", "zh", "ja", "yue"];
+const INTRO_ROTATION_LOCALES = ["es", "pt", "en", "fr", "de", "tl", "zh", "ja", "yue"];
 
 const setIntroLocale = (locale) => {
   const pack = TRANSLATIONS[locale] ?? TRANSLATIONS.en;
