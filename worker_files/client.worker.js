@@ -107,9 +107,8 @@
   // -------------------------
   function pickAssetIdForOrigin(cfg, origin) {
     const o = normalizeOrigin(origin);
-    const map = cfg && cfg.asset_identity && cfg.asset_identity.origin_to_asset_id
-      ? cfg.asset_identity.origin_to_asset_id
-      : null;
+    const map =
+      cfg && cfg.asset_identity && cfg.asset_identity.origin_to_asset_id ? cfg.asset_identity.origin_to_asset_id : null;
 
     if (map && typeof map === "object") {
       // Exact match first
@@ -153,7 +152,9 @@
     const controller = new AbortController();
 
     function forwardAbort() {
-      try { controller.abort(); } catch {}
+      try {
+        controller.abort();
+      } catch {}
     }
 
     if (signal) {
@@ -162,7 +163,9 @@
     }
 
     const t = setTimeout(() => {
-      try { controller.abort(); } catch {}
+      try {
+        controller.abort();
+      } catch {}
     }, timeoutMs);
 
     return { signal: controller.signal, cancel: () => clearTimeout(t) };
@@ -213,16 +216,13 @@
     const gatewayEndpoint = safeText(cfg0.gatewayEndpoint, 600) || workerEndpoint || "";
 
     const assistantEndpoint =
-      safeText(cfg0.assistantEndpoint, 700) ||
-      (workerEndpoint ? `${workerEndpoint.replace(/\/$/, "")}/api/chat` : "");
+      safeText(cfg0.assistantEndpoint, 700) || (workerEndpoint ? `${workerEndpoint.replace(/\/$/, "")}/api/chat` : "");
 
     const voiceEndpoint =
-      safeText(cfg0.voiceEndpoint, 700) ||
-      (workerEndpoint ? `${workerEndpoint.replace(/\/$/, "")}/api/voice` : "");
+      safeText(cfg0.voiceEndpoint, 700) || (workerEndpoint ? `${workerEndpoint.replace(/\/$/, "")}/api/voice` : "");
 
     const ttsEndpoint =
-      safeText(cfg0.ttsEndpoint, 700) ||
-      (workerEndpoint ? `${workerEndpoint.replace(/\/$/, "")}/api/tts` : "");
+      safeText(cfg0.ttsEndpoint, 700) || (workerEndpoint ? `${workerEndpoint.replace(/\/$/, "")}/api/tts` : "");
 
     const allowedOrigins = Array.isArray(cfg0.allowedOrigins) ? cfg0.allowedOrigins.map(normalizeOrigin).filter(Boolean) : [];
 
@@ -283,7 +283,7 @@
 
     // Optional integrity header (caller may also override in extraHeaders)
     const integHeader = getOptionalIntegrityHeaderName(_cfg);
-    if (integHeader && !options.extraHeaders?.[integHeader]) {
+    if (integHeader && !(options.extraHeaders && Object.prototype.hasOwnProperty.call(options.extraHeaders, integHeader))) {
       // best-effort (safe if crypto.subtle unavailable -> "")
       const b64 = await sha512Base64(bodyJson);
       if (b64) base[integHeader] = b64;
@@ -315,9 +315,10 @@
     const { signal, cancel } = withTimeout(options.signal, timeoutMs);
 
     const mode = safeText(options.mode || "stt", 12).toLowerCase();
-    const endpoint = mode === "chat"
-      ? `${_cfg.voiceEndpoint}${_cfg.voiceEndpoint.includes("?") ? "&" : "?"}mode=chat`
-      : `${_cfg.voiceEndpoint}${_cfg.voiceEndpoint.includes("?") ? "&" : "?"}mode=stt`;
+    const endpoint =
+      mode === "chat"
+        ? `${_cfg.voiceEndpoint}${_cfg.voiceEndpoint.includes("?") ? "&" : "?"}mode=chat`
+        : `${_cfg.voiceEndpoint}${_cfg.voiceEndpoint.includes("?") ? "&" : "?"}mode=stt`;
 
     let body = null;
     let contentType = "";
@@ -388,7 +389,7 @@
 
     // Optional integrity header (best-effort)
     const integHeader = getOptionalIntegrityHeaderName(_cfg);
-    if (integHeader && !options.extraHeaders?.[integHeader]) {
+    if (integHeader && !(options.extraHeaders && Object.prototype.hasOwnProperty.call(options.extraHeaders, integHeader))) {
       const b64 = await sha512Base64(bodyJson);
       if (b64) base[integHeader] = b64;
     }
