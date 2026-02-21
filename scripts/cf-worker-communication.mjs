@@ -161,7 +161,6 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
     const { url, response } = await send("handshake", {
       method: "POST",
       headers: {
-        "x-gabo-repo-id": secret,
         "content-type": "application/json",
         "accept": "application/json",
         [headerName]: secret,
