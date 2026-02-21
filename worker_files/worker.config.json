@@ -117,7 +117,7 @@
     "notes": "Apply integrity attributes to external CDN resources in HTML templates."
   },
   "actions_handshake": {
-    "ready": true,
+    "ready": false,
     "path": "/__repo/handshake",
     "header_name": "x-gabo-repo-id",
     "algorithm": "shared-secret-header",
