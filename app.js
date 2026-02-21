@@ -1,3 +1,15 @@
+/* app.js — Gabo UI (repo)
+ *
+ * Uses:
+ * - worker_files/worker.config.json (canonical config)
+ * - worker_files/client.worker.js   (WorkerClient)
+ *
+ * Goal:
+ * - Send chat/voice/tts to gateway worker with strict asset identity header (x-ops-asset-id)
+ * - Client-side TinyML sanitize + honeypots
+ * - SSE streaming reader
+ */
+
 const form = document.getElementById("chat-form");
 const input = document.getElementById("msgInput");
 const sendBtn = document.getElementById("send-btn");
@@ -10,7 +22,6 @@ const dynamicHoneypotFields = new Set();
 const thinkingStatus = document.getElementById("thinking-status");
 const voiceHelper = document.getElementById("voice-helper");
 const cancelBtn = document.getElementById("cancel-btn");
-
 
 const HONEYPOT_DYNAMIC_ATTR = "data-gabo-honeypot";
 const HONEYPOT_DYNAMIC_VALUE_ATTR = "data-gabo-honeypot-value";
@@ -49,7 +60,6 @@ let OPS_ASSET_ID = "";
 let workerEndpoint = "";
 let gatewayEndpoint = "";
 let allowedOrigins = [];
-
 
 window.OPS_ASSET_BY_ORIGIN = OPS_ASSET_BY_ORIGIN;
 window.OPS_ASSET_ID = OPS_ASSET_ID;
@@ -114,7 +124,6 @@ function applyCanonicalConfig(cfg) {
   const cfgAllowed = asArray(cfg.allowedOrigins).filter(Boolean);
   if (cfgAllowed.length) allowedOrigins = cfgAllowed;
 
-
   // Asset identity mapping
   const headerName = normalizeHeaderName(cfg.asset_identity?.header_name || "x-ops-asset-id");
   const mapRaw = cfg.asset_identity?.origin_to_asset_id;
@@ -162,7 +171,6 @@ async function loadCanonicalConfig() {
 
   // Final safety fallback (only if config missing)
   if (!workerEndpoint && !gatewayEndpoint) {
-    // Keep UI usable, but it will fail closed later if endpoints aren’t set.
     workerEndpoint = "";
     gatewayEndpoint = "";
   }
@@ -175,62 +183,50 @@ const TRANSLATIONS = {
   en: {
     welcome: "Welcome",
     startConversation: "Start a conversation",
-    introCopy:
-      "Chat in any language — spoken or written. Gabo auto-detects your language and replies in kind.",
+    introCopy: "Chat in any language — spoken or written. Gabo auto-detects your language and replies in kind.",
     greeting: "Hello",
     farewell: "Goodbye",
-    gaboIntro:
-      "Chat in any language — spoken or written. Gabo auto-detects your language and replies in kind.",
+    gaboIntro: "Chat in any language — spoken or written. Gabo auto-detects your language and replies in kind.",
   },
   es: {
     welcome: "Bienvenido",
     startConversation: "Inicia una conversación",
-    introCopy:
-      "Chatea en cualquier idioma — hablado o escrito. Gabo detecta tu idioma y responde en el mismo.",
+    introCopy: "Chatea en cualquier idioma — hablado o escrito. Gabo detecta tu idioma y responde en el mismo.",
     greeting: "Hola",
     farewell: "Adiós",
-    gaboIntro:
-      "Chatea en cualquier idioma — hablado o escrito. Gabo detecta tu idioma y responde en el mismo.",
+    gaboIntro: "Chatea en cualquier idioma — hablado o escrito. Gabo detecta tu idioma y responde en el mismo.",
   },
   fr: {
     welcome: "Bienvenue",
     startConversation: "Commencez une conversation",
-    introCopy:
-      "Discutez dans n’importe quelle langue — parlée ou écrite. Gabo détecte votre langue et répond en conséquence.",
+    introCopy: "Discutez dans n’importe quelle langue — parlée ou écrite. Gabo détecte votre langue et répond en conséquence.",
     greeting: "Bonjour",
     farewell: "Au revoir",
-    gaboIntro:
-      "Discutez dans n’importe quelle langue — parlée ou écrite. Gabo détecte votre langue et répond en conséquence.",
+    gaboIntro: "Discutez dans n’importe quelle langue — parlée ou écrite. Gabo détecte votre langue et répond en conséquence.",
   },
   pt: {
     welcome: "Bem-vindo",
     startConversation: "Inicie uma conversa",
-    introCopy:
-      "Converse em qualquer idioma — falado ou escrito. Gabo detecta seu idioma e responde da mesma forma.",
+    introCopy: "Converse em qualquer idioma — falado ou escrito. Gabo detecta seu idioma e responde da mesma forma.",
     greeting: "Olá",
     farewell: "Tchau",
-    gaboIntro:
-      "Converse em qualquer idioma — falado ou escrito. Gabo detecta seu idioma e responde da mesma forma.",
+    gaboIntro: "Converse em qualquer idioma — falado ou escrito. Gabo detecta seu idioma e responde da mesma forma.",
   },
   ar: {
     welcome: "مرحبًا",
     startConversation: "ابدأ محادثة",
-    introCopy:
-      "تحدث بأي لغة — منطوقة أو مكتوبة. يكتشف Gabo لغتك ويرد بالمثل.",
+    introCopy: "تحدث بأي لغة — منطوقة أو مكتوبة. يكتشف Gabo لغتك ويرد بالمثل.",
     greeting: "مرحبًا",
     farewell: "مع السلامة",
-    gaboIntro:
-      "تحدث بأي لغة — منطوقة أو مكتوبة. يكتشف Gabo لغتك ويرد بالمثل.",
+    gaboIntro: "تحدث بأي لغة — منطوقة أو مكتوبة. يكتشف Gabo لغتك ويرد بالمثل.",
   },
   ru: {
     welcome: "Добро пожаловать",
     startConversation: "Начните разговор",
-    introCopy:
-      "Общайтесь на любом языке — устном или письменном. Gabo определяет ваш язык и отвечает тем же.",
+    introCopy: "Общайтесь на любом языке — устном или письменном. Gabo определяет ваш язык и отвечает тем же.",
     greeting: "Здравствуйте",
     farewell: "До свидания",
-    gaboIntro:
-      "Общайтесь на любом языке — устном или письменном. Gabo определяет ваш язык и отвечает тем же.",
+    gaboIntro: "Общайтесь на любом языке — устном или письменном. Gabo определяет ваш язык и отвечает тем же.",
   },
   zh: {
     welcome: "欢迎",
@@ -238,8 +234,7 @@ const TRANSLATIONS = {
     introCopy: "用任何语言交流——口语或书面语。Gabo 会自动识别你的语言并以相同语言回复。",
     greeting: "你好",
     farewell: "再见",
-    gaboIntro:
-      "用任何语言交流——口语或书面语。Gabo 会自动识别你的语言并以相同语言回复。",
+    gaboIntro: "用任何语言交流——口语或书面语。Gabo 会自动识别你的语言并以相同语言回复。",
   },
   yue: {
     welcome: "歡迎",
@@ -247,68 +242,55 @@ const TRANSLATIONS = {
     introCopy: "用任何語言交流——口語或書面語。Gabo 會自動識別你嘅語言並用相同語言回覆。",
     greeting: "你好",
     farewell: "再見",
-    gaboIntro:
-      "用任何語言交流——口語或書面語。Gabo 會自動識別你嘅語言並用相同語言回覆。",
+    gaboIntro: "用任何語言交流——口語或書面語。Gabo 會自動識別你嘅語言並用相同語言回覆。",
   },
   de: {
     welcome: "Willkommen",
     startConversation: "Starten Sie ein Gespräch",
-    introCopy:
-      "Chatten Sie in jeder Sprache — gesprochen oder geschrieben. Gabo erkennt Ihre Sprache und antwortet entsprechend.",
+    introCopy: "Chatten Sie in jeder Sprache — gesprochen oder geschrieben. Gabo erkennt Ihre Sprache und antwortet entsprechend.",
     greeting: "Hallo",
     farewell: "Auf Wiedersehen",
-    gaboIntro:
-      "Chatten Sie in jeder Sprache — gesprochen oder geschrieben. Gabo erkennt Ihre Sprache und antwortet entsprechend.",
+    gaboIntro: "Chatten Sie in jeder Sprache — gesprochen oder geschrieben. Gabo erkennt Ihre Sprache und antwortet entsprechend.",
   },
   sv: {
     welcome: "Välkommen",
     startConversation: "Starta en konversation",
-    introCopy:
-      "Chatta på vilket språk som helst — talat eller skrivet. Gabo identifierar ditt språk och svarar på samma sätt.",
+    introCopy: "Chatta på vilket språk som helst — talat eller skrivet. Gabo identifierar ditt språk och svarar på samma sätt.",
     greeting: "Hej",
     farewell: "Hej då",
-    gaboIntro:
-      "Chatta på vilket språk som helst — talat eller skrivet. Gabo identifierar ditt språk och svarar på samma sätt.",
+    gaboIntro: "Chatta på vilket språk som helst — talat eller skrivet. Gabo identifierar ditt språk och svarar på samma sätt.",
   },
   no: {
     welcome: "Velkommen",
     startConversation: "Start en samtale",
-    introCopy:
-      "Chat på hvilket som helst språk — muntlig eller skriftlig. Gabo oppdager språket ditt og svarer på samme måte.",
+    introCopy: "Chat på hvilket som helst språk — muntlig eller skriftlig. Gabo oppdager språket ditt og svarer på samme måte.",
     greeting: "Hei",
     farewell: "Ha det",
-    gaboIntro:
-      "Chat på hvilket som helst språk — muntlig eller skriftlig. Gabo oppdager språket ditt og svarer på samme måte.",
+    gaboIntro: "Chat på hvilket som helst språk — muntlig eller skriftlig. Gabo oppdager språket ditt og svarer på samme måte.",
   },
   fi: {
     welcome: "Tervetuloa",
     startConversation: "Aloita keskustelu",
-    introCopy:
-      "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Gabo tunnistaa kielesi ja vastaa samalla kielellä.",
+    introCopy: "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Gabo tunnistaa kielesi ja vastaa samalla kielellä.",
     greeting: "Hei",
     farewell: "Näkemiin",
-    gaboIntro:
-      "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Gabo tunnistaa kielesi ja vastaa samalla kielellä.",
+    gaboIntro: "Keskustele millä tahansa kielellä — puhuttuna tai kirjoitettuna. Gabo tunnistaa kielesi ja vastaa samalla kielellä.",
   },
   tl: {
     welcome: "Maligayang pagdating",
     startConversation: "Simulan ang usapan",
-    introCopy:
-      "Makipag-chat sa anumang wika — pasalita man o pasulat. Awtomatikong kinikilala ng Gabo ang iyong wika at sumasagot nang naaayon.",
+    introCopy: "Makipag-chat sa anumang wika — pasalita man o pasulat. Awtomatikong kinikilala ng Gabo ang iyong wika at sumasagot nang naaayon.",
     greeting: "Kamusta",
     farewell: "Paalam",
-    gaboIntro:
-      "Makipag-chat sa anumang wika — pasalita man o pasulat. Awtomatikong kinikilala ng Gabo ang iyong wika at sumasagot nang naaayon.",
+    gaboIntro: "Makipag-chat sa anumang wika — pasalita man o pasulat. Awtomatikong kinikilala ng Gabo ang iyong wika at sumasagot nang naaayon.",
   },
   ja: {
     welcome: "ようこそ",
     startConversation: "会話を始める",
-    introCopy:
-      "どの言語でも会話できます — 話し言葉でも書き言葉でも。Gabo が言語を自動判別し、同じ言語で返信します。",
+    introCopy: "どの言語でも会話できます — 話し言葉でも書き言葉でも。Gabo が言語を自動判別し、同じ言語で返信します。",
     greeting: "こんにちは",
     farewell: "さようなら",
-    gaboIntro:
-      "どの言語でも会話できます — 話し言葉でも書き言葉でも。Gabo が言語を自動判別し、同じ言語で返信します。",
+    gaboIntro: "どの言語でも会話できます — 話し言葉でも書き言葉でも。Gabo が言語を自動判別し、同じ言語で返信します。",
   },
 };
 
@@ -538,7 +520,7 @@ const cancelStream = () => {
 cancelBtn?.addEventListener("click", cancelStream);
 
 // -------------------------
-// Tiny-ML sanitizer
+// Tiny-ML sanitizer (client side)
 // -------------------------
 const TINY_ML_PATTERNS = [
   { regex: /<\s*script\b/i, weight: 6 },
@@ -569,7 +551,7 @@ const sanitizeUserInput = (text) => {
   out = out.replace(/\u0000/g, "");
   out = out.replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ");
 
-  // Remove fenced and inline code first (tiny-ML anti code payload)
+  // Remove fenced and inline code
   out = out.replace(/```[\s\S]*?```/g, " [removed_code_block] ");
   out = out.replace(/~~~[\s\S]*?~~~/g, " [removed_code_block] ");
   out = out.replace(/`[^`]{1,200}`/g, " [removed_inline_code] ");
@@ -619,12 +601,7 @@ const tinyMlHoneypotRiskScore = (value) => {
   const sample = String(value || "").trim();
   if (!sample) return 0;
   let score = 0;
-  const rules = [
-    /https?:\/\//i,
-    /@/,
-    /\b(select|insert|union|drop|script|function|return|const|let|var)\b/i,
-    /[{}<>;=()]/,
-  ];
+  const rules = [/https?:\/\//i, /@/, /\b(select|insert|union|drop|script|function|return|const|let|var)\b/i, /[{}<>;=()]/];
   rules.forEach((rule) => {
     if (rule.test(sample)) score += 2;
   });
@@ -778,22 +755,8 @@ const buildLanguageHeaders = (language) => {
   };
 };
 
-const getAssetHeaderName = () => normalizeHeaderName(window.OPS_ASSET_HEADER_NAME || CANONICAL_CONFIG?.asset_identity?.header_name || "x-ops-asset-id");
-
-const buildHoneypotTelemetry = () => {
-  const dynamicPayload = Array.from(dynamicHoneypotFields)
-    .map((field) => ({
-      key: String(field?.getAttribute(HONEYPOT_DYNAMIC_VALUE_ATTR) || "").trim(),
-      value: String(field?.value || "").trim(),
-    }))
-    .filter(({ value }) => Boolean(value));
-
-  return {
-    honeypot: String(honeypotField?.value || "").trim(),
-    pre_honeypot: String(preHoneypotField?.value || "").trim(),
-    dynamic: dynamicPayload,
-  };
-};
+const getAssetHeaderName = () =>
+  normalizeHeaderName(window.OPS_ASSET_HEADER_NAME || CANONICAL_CONFIG?.asset_identity?.header_name || "x-ops-asset-id");
 
 const buildSecurityHeaders = (language) => {
   const assetHeaderName = getAssetHeaderName();
@@ -801,7 +764,6 @@ const buildSecurityHeaders = (language) => {
     ...buildLanguageHeaders(language),
     "x-gabo-tinyml-mode": DEFAULT_REQUEST_META.tinyml_mode || "strict",
   };
-
 
   // Always include asset id (fail-closed if missing)
   if (OPS_ASSET_ID) headers[assetHeaderName] = OPS_ASSET_ID;
@@ -838,7 +800,11 @@ const buildCorsFailureMessage = (endpoint) => {
 
   const origin = window.location.origin;
   const target = endpointOrigin || String(endpoint || "(unknown endpoint)");
-  return `Network request blocked before reaching chat API. This is usually CORS preflight rejection. Verify worker CORS allows Origin ${origin} and responds to OPTIONS with Access-Control-Allow-Origin and Access-Control-Allow-Headers.` + (target ? ` Target: ${target}.` : "");
+  return (
+    `Network request blocked before reaching chat API. This is usually CORS preflight rejection. ` +
+    `Verify worker CORS allows Origin ${origin} and responds to OPTIONS with Access-Control-Allow-Origin and Access-Control-Allow-Headers.` +
+    (target ? ` Target: ${target}.` : "")
+  );
 };
 
 const getActiveEndpoint = () => gatewayEndpoint || workerEndpoint;
@@ -1077,7 +1043,7 @@ async function onMicClick() {
             await stopMicAndTranscribe();
           } catch (error) {
             console.error(error);
-    voiceReplyRequested = false;
+            voiceReplyRequested = false;
           }
         }
       }, 8000);
@@ -1167,7 +1133,6 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-
   const sanitizedResult = sanitizeAndValidateMessage(rawMessage);
   if (!sanitizedResult.sanitized || !sanitizedResult.integrityOk || sanitizedResult.initialRisk >= 8) {
     input.value = "";
@@ -1226,13 +1191,10 @@ form.addEventListener("submit", async (event) => {
 
     const extraHeaders = buildSecurityHeaders(getPreferredLanguage());
 
-    const response = await window.WorkerClient.postChat(
-      payload,
-      {
-        signal: controller.signal,
-        extraHeaders,
-      }
-    );
+    const response = await window.WorkerClient.postChat(payload, {
+      signal: controller.signal,
+      extraHeaders,
+    });
 
     if (!response.ok) {
       const errorText = await readWorkerError(response);
@@ -1259,8 +1221,7 @@ form.addEventListener("submit", async (event) => {
     if (isLikelyCorsFetchError(error)) {
       assistantBubble.textContent = buildCorsFailureMessage(endpoint);
     } else {
-      assistantBubble.textContent =
-        error?.message || "We couldn't reach the secure assistant. Please try again shortly.";
+      assistantBubble.textContent = error?.message || "We couldn't reach the secure assistant. Please try again shortly.";
     }
     console.error(error);
   } finally {
@@ -1272,12 +1233,12 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-
 // -------------------------
 // Init
 // -------------------------
 const initApp = async () => {
   await loadCanonicalConfig();
+
   // If config loaded but only assistantEndpoint exists, derive worker endpoint
   if (!workerEndpoint && CANONICAL_CONFIG?.assistantEndpoint) {
     const derived = deriveWorkerEndpoint(CANONICAL_CONFIG.assistantEndpoint);
