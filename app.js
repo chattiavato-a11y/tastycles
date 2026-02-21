@@ -810,11 +810,11 @@ const buildHoneypotTelemetry = () => {
   };
 };
 
-const buildSecurityHeaders = (language, integrityB64 = "") => {
+const buildSecurityHeaders = (language) => {
   const assetHeaderName = getAssetHeaderName();
   const headers = {
     ...buildLanguageHeaders(language),
-    "x-ops-src-sha512-b64": integrityB64,
+    "x-gabo-tinyml-mode": DEFAULT_REQUEST_META.tinyml_mode || "strict",
   };
 
 
@@ -838,6 +838,22 @@ const warnIfOriginMissing = () => {
   if (!originAllowed) {
     console.warn(`Origin ${window.location.origin} is not listed in ${CANONICAL_CONFIG_URL}.`);
   }
+};
+
+const isLikelyCorsFetchError = (error) => {
+  const message = String(error?.message || "");
+  return error?.name === "TypeError" && /failed to fetch/i.test(message);
+};
+
+const buildCorsFailureMessage = (endpoint) => {
+  let endpointOrigin = "";
+  try {
+    endpointOrigin = new URL(String(endpoint || ""), window.location.origin).origin;
+  } catch {}
+
+  const origin = window.location.origin;
+  const target = endpointOrigin || String(endpoint || "(unknown endpoint)");
+  return `Network request blocked before reaching chat API. This is usually CORS preflight rejection. Verify worker CORS allows Origin ${origin} and responds to OPTIONS with Access-Control-Allow-Origin and Access-Control-Allow-Headers.` + (target ? ` Target: ${target}.` : "");
 };
 
 const getActiveEndpoint = () => gatewayEndpoint || workerEndpoint;
@@ -1183,7 +1199,6 @@ form.addEventListener("submit", async (event) => {
   }
 
   const message = sanitizedResult.sanitized;
-  const integrityB64 = await TINY_ML_ENGINE.integrity(message);
 
   addMessage(message, true);
   input.value = "";
@@ -1203,6 +1218,12 @@ form.addEventListener("submit", async (event) => {
 
   warnIfOriginMissing();
 
+  if (allowedOrigins.length && !isOriginAllowed(window.location.origin, allowedOrigins)) {
+    assistantBubble.textContent = `Origin ${window.location.origin} is not allowed by ${CANONICAL_CONFIG_URL}.`;
+    stopThinking();
+    return;
+  }
+
   setStreamingState(true);
   const controller = new AbortController();
   activeController = controller;
@@ -1218,7 +1239,7 @@ form.addEventListener("submit", async (event) => {
       },
     };
 
-    const extraHeaders = buildSecurityHeaders(getPreferredLanguage(), integrityB64);
+    const extraHeaders = buildSecurityHeaders(getPreferredLanguage());
 
     const response = await window.WorkerClient.postChat(
       payload,
@@ -1250,8 +1271,12 @@ form.addEventListener("submit", async (event) => {
     }
   } catch (error) {
     if (error.name === "AbortError") return;
-    assistantBubble.textContent =
-      error?.message || "We couldn't reach the secure assistant. Please try again shortly.";
+    if (isLikelyCorsFetchError(error)) {
+      assistantBubble.textContent = buildCorsFailureMessage(endpoint);
+    } else {
+      assistantBubble.textContent =
+        error?.message || "We couldn't reach the secure assistant. Please try again shortly.";
+    }
     console.error(error);
   } finally {
     activeController = null;
