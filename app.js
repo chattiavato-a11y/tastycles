@@ -672,26 +672,11 @@ const sanitizeAndValidateMessage = (raw) => {
   };
 };
 
-const tinyMlIntegrityDigest = async (text) => {
-  const normalized = sanitizeUserInput(text || "");
-  if (!normalized || !window.crypto?.subtle) return "";
-  const bytes = new TextEncoder().encode(normalized);
-  const hash = await crypto.subtle.digest("SHA-512", bytes);
-  const u8 = new Uint8Array(hash);
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < u8.length; i += chunk) {
-    binary += String.fromCharCode(...u8.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-};
-
 const TINY_ML_ENGINE = {
   score: tinyMlRiskScore,
   sanitize: sanitizeUserInput,
   hasResidual: hasResidualMaliciousContent,
   honeypotScore: tinyMlHoneypotRiskScore,
-  integrity: tinyMlIntegrityDigest,
 };
 window.GABO_TINY_ML = TINY_ML_ENGINE;
 
