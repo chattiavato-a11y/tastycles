@@ -35,7 +35,6 @@
   # images from self/data/https, audio blobs, web workers from self/blob.
   Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://drastic-measures.rulathemtodos.workers.dev https://chattiavato-a11y.github.io https://challenges.cloudflare.com; media-src 'self' blob:; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests; block-all-mixed-content
 
-
 # --------------------------------------------------------------------
 # Public JSON/JS assets under /worker_files/ may be fetched by other origins
 # (dash, github pages, etc). Make these explicitly cross-origin readable.
