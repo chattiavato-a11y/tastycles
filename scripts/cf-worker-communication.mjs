@@ -1,8 +1,33 @@
 #!/usr/bin/env node
+/**
+ * scripts/cf-worker-communication.mjs
+ *
+ * Repo-side communication helper for the drastic-measures Gateway Worker.
+ * Used by GitHub Actions (and locally) to:
+ * - GET health
+ * - POST handshake (repo ↔ worker)
+ * - (optionally) POST chat/voice/tts for smoke tests
+ *
+ * SECURITY:
+ * - Sanitizes headers + JSON-like bodies using a tiny rule-set (no eval/new Function).
+ * - Blocks obviously code-like payloads so CI doesn't accidentally ship malicious test input.
+ *
+ * Usage examples:
+ *   node scripts/cf-worker-communication.mjs --action health
+ *   node scripts/cf-worker-communication.mjs --action handshake
+ *   node scripts/cf-worker-communication.mjs --action chat --body '{"message":"hello"}' --header "x-ops-asset-id: ... "
+ *
+ * Required file:
+ *   worker_files/worker.config.json
+ */
+
 import { readFileSync } from "node:fs";
 
 const DEFAULT_CONFIG_PATH = "worker_files/worker.config.json";
 
+/* -------------------------
+ * Tiny sanitizer / risk
+ * ------------------------- */
 const TINY_ML_PATTERNS = [
   /<\s*script\b/i,
   /<\/?\s*(iframe|object|embed|svg|math|style|link|meta|base|form)\b/i,
@@ -71,6 +96,15 @@ const sanitizeHeaders = (headers) => {
 
 const sanitizeBodyPayload = (body) => {
   if (body === undefined || body === null) return undefined;
+
+  // If caller passes a non-string, treat as JSON-like object
+  if (typeof body === "object") {
+    const cleaned = sanitizeJsonLike(body);
+    const serialized = JSON.stringify(cleaned);
+    if (tinyMlRiskScore(serialized) >= 6) throw new Error("Tiny-ML blocked high-risk payload after sanitization.");
+    return serialized;
+  }
+
   const raw = String(body);
   try {
     const parsed = JSON.parse(raw);
@@ -85,6 +119,9 @@ const sanitizeBodyPayload = (body) => {
   }
 };
 
+/* -------------------------
+ * Config + endpoints
+ * ------------------------- */
 const normalizeRoutePath = (value, fallback) => {
   const raw = toSafeString(value || fallback || "");
   if (!raw) return "";
@@ -97,15 +134,14 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
   const config = parseJsonFile(configPath);
   const endpoint = toSafeString(config.gatewayEndpoint || config.workerEndpoint).replace(/\/$/, "");
 
-  if (!endpoint) {
-    throw new Error(`Missing gatewayEndpoint/workerEndpoint in ${configPath}`);
-  }
+  if (!endpoint) throw new Error(`Missing gatewayEndpoint/workerEndpoint in ${configPath}`);
 
   const routes = {
     chat: normalizeRoutePath(config.routes?.chat, "/api/chat"),
     voice: normalizeRoutePath(config.routes?.voice, "/api/voice"),
     tts: normalizeRoutePath(config.routes?.tts, "/api/tts"),
     health: normalizeRoutePath(config.routes?.health, "/health"),
+    // Some workers also respond on /api/health, but we keep the canonical contract
     handshake: normalizeRoutePath(config.actions_handshake?.path, "/__repo/handshake"),
   };
 
@@ -125,6 +161,7 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
       headers: safeHeaders,
       body: safeBody,
     });
+
     return { url, response };
   };
 
@@ -132,10 +169,7 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
     const hs = config.actions_handshake || {};
 
     if (!hs.ready) {
-      return {
-        skipped: true,
-        reason: "actions_handshake.ready is false",
-      };
+      return { skipped: true, reason: "actions_handshake.ready is false" };
     }
 
     const algorithm = String(hs.algorithm || "shared-secret-header");
@@ -145,11 +179,10 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
 
     const secretName = String(hs.secret_name || "DRASTIC_MEASURES");
     const secret = process.env[secretName];
-    if (!secret) {
-      throw new Error(`Missing required secret env: ${secretName}`);
-    }
+    if (!secret) throw new Error(`Missing required secret env: ${secretName}`);
 
     const headerName = String(hs.header_name || "x-gabo-repo-id").trim().toLowerCase();
+
     const payload = sanitizeJsonLike({
       ok: true,
       from: "github-actions",
@@ -162,7 +195,7 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "accept": "application/json",
+        accept: "application/json",
         [headerName]: secret,
       },
       body: JSON.stringify(payload),
@@ -172,16 +205,12 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
     return { url, response, text };
   };
 
-  return {
-    config,
-    endpoint,
-    routes,
-    urlFor,
-    send,
-    handshake,
-  };
+  return { config, endpoint, routes, urlFor, send, handshake };
 };
 
+/* -------------------------
+ * CLI
+ * ------------------------- */
 const parseArgs = (argv) => {
   const args = {
     action: "health",
@@ -193,6 +222,7 @@ const parseArgs = (argv) => {
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
+
     if (token === "--action") {
       args.action = toSafeString(argv[i + 1] || args.action);
       i += 1;
@@ -241,7 +271,20 @@ const runCli = async () => {
       process.exit(0);
     }
 
-    console.log(JSON.stringify({ action: "handshake", url: result.url, status: result.response.status, ok: result.response.ok, body: result.text.slice(0, 1000) }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          action: "handshake",
+          url: result.url,
+          status: result.response.status,
+          ok: result.response.ok,
+          body: String(result.text || "").slice(0, 1000),
+        },
+        null,
+        2
+      )
+    );
+
     if (!result.response.ok) process.exit(1);
     return;
   }
@@ -259,7 +302,21 @@ const runCli = async () => {
   const { url, response } = await workerComm.send(args.action, { method, headers, body });
   const text = await response.text().catch(() => "");
 
-  console.log(JSON.stringify({ action: args.action, method, url, status: response.status, ok: response.ok, body: text.slice(0, 1000) }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        action: args.action,
+        method,
+        url,
+        status: response.status,
+        ok: response.ok,
+        body: String(text || "").slice(0, 1000),
+      },
+      null,
+      2
+    )
+  );
+
   if (!response.ok) process.exit(1);
 };
 
