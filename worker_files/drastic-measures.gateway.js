@@ -163,7 +163,11 @@ function buildCfg(env) {
     return _CFG;
   }
 
-  const allowedOriginsArr = Array.isArray(raw.allowedOrigins) ? raw.allowedOrigins : [];
+  const allowedOriginsArr = Array.isArray(raw.allowedOrigins)
+    ? raw.allowedOrigins
+    : Array.isArray(raw.allowed_origins)
+      ? raw.allowed_origins
+      : [];
   const allowedOrigins = new Set(
     (allowedOriginsArr.length ? allowedOriginsArr : Array.from(FALLBACK.allowedOrigins))
       .map(normalizeOrigin).filter(Boolean)
@@ -171,7 +175,9 @@ function buildCfg(env) {
 
   const originToAssetRaw = raw?.asset_identity?.origin_to_asset_id && typeof raw.asset_identity.origin_to_asset_id === "object"
     ? raw.asset_identity.origin_to_asset_id
-    : {};
+    : raw?.origin_to_asset_id && typeof raw.origin_to_asset_id === "object"
+      ? raw.origin_to_asset_id
+      : {};
   const originToAsset = { ...FALLBACK.originToAsset };
   for (const [k, v] of Object.entries(originToAssetRaw)) {
     const o = normalizeOrigin(k);
@@ -231,7 +237,7 @@ function corsPreflight(cfg, req, origin) {
   const o = normalizeOrigin(origin);
   const allowed = originAllowed(cfg, o);
 
-  if (allowed) {
+  if (o) {
     h.set("Access-Control-Allow-Origin", o);
     h.set("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
   }
@@ -255,7 +261,7 @@ function corsResponse(cfg, origin) {
   const h = new Headers();
   const o = normalizeOrigin(origin);
   const allowed = originAllowed(cfg, o);
-  if (allowed) {
+  if (o) {
     h.set("Access-Control-Allow-Origin", o);
     h.set("Vary", "Origin");
   }
