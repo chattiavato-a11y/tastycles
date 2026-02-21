@@ -150,3 +150,4 @@
     "Origins are stored without paths; if a site is served from a subpath, use source.path_prefix_hint as a human hint only."
   ]
 }
+
