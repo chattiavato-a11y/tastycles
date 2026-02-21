@@ -3,7 +3,87 @@ import { readFileSync } from "node:fs";
 
 const DEFAULT_CONFIG_PATH = "worker_files/worker.config.json";
 
+const TINY_ML_PATTERNS = [
+  /<\s*script\b/i,
+  /<\/?\s*(iframe|object|embed|svg|math|style|link|meta|base|form)\b/i,
+  /javascript\s*:/i,
+  /\b(vbscript|data\s*:\s*text\/html)\b/i,
+  /\bon\w+\s*=/i,
+  /\b(eval|Function|setTimeout\s*\(\s*["'`]|setInterval\s*\(\s*["'`])\b/i,
+  /document\.(cookie|write)/i,
+  /\b(import|export|class|function|return|const|let|var|async|await)\b/i,
+  /```[\s\S]*?```|~~~[\s\S]*?~~~/,
+];
+
 const toSafeString = (value) => String(value ?? "").trim();
+
+const tinyMlRiskScore = (text) => {
+  const sample = String(text || "");
+  let score = 0;
+  TINY_ML_PATTERNS.forEach((pattern) => {
+    if (pattern.test(sample)) score += 2;
+  });
+  if (sample.length > 2000) score += 1;
+  return score;
+};
+
+const sanitizeText = (text) => {
+  let out = String(text || "");
+  out = out.replace(/\u0000/g, "");
+  out = out.replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ");
+  out = out.replace(/```[\s\S]*?```/g, " [removed_code_block] ");
+  out = out.replace(/~~~[\s\S]*?~~~/g, " [removed_code_block] ");
+  out = out.replace(/`[^`]{1,400}`/g, " [removed_inline_code] ");
+  out = out.replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, " ");
+  out = out.replace(/<\s*(iframe|object|embed|style|form|svg|math|link|meta|base)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, " ");
+  out = out.replace(/<[^>]+>/g, " ");
+  out = out.replace(/javascript\s*:/gi, "");
+  out = out.replace(/vbscript\s*:/gi, "");
+  out = out.replace(/data\s*:\s*text\/html/gi, "");
+  out = out.replace(/\bon\w+\s*=\s*["'][\s\S]*?["']/gi, "");
+  out = out.replace(/\bon\w+\s*=\s*[^\s>]+/gi, "");
+  out = out.replace(/\s+/g, " ").trim();
+  return out;
+};
+
+const sanitizeJsonLike = (value) => {
+  if (typeof value === "string") return sanitizeText(value);
+  if (Array.isArray(value)) return value.map((entry) => sanitizeJsonLike(entry));
+  if (value && typeof value === "object") {
+    const out = {};
+    Object.entries(value).forEach(([key, entry]) => {
+      out[sanitizeText(key)] = sanitizeJsonLike(entry);
+    });
+    return out;
+  }
+  return value;
+};
+
+const sanitizeHeaders = (headers) => {
+  const out = {};
+  Object.entries(headers || {}).forEach(([key, value]) => {
+    const cleanKey = String(key || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (!cleanKey) return;
+    out[cleanKey] = sanitizeText(value);
+  });
+  return out;
+};
+
+const sanitizeBodyPayload = (body) => {
+  if (body === undefined || body === null) return undefined;
+  const raw = String(body);
+  try {
+    const parsed = JSON.parse(raw);
+    const cleaned = sanitizeJsonLike(parsed);
+    const serialized = JSON.stringify(cleaned);
+    if (tinyMlRiskScore(serialized) >= 6) throw new Error("Tiny-ML blocked high-risk payload after sanitization.");
+    return serialized;
+  } catch {
+    const cleanedText = sanitizeText(raw);
+    if (tinyMlRiskScore(cleanedText) >= 6) throw new Error("Tiny-ML blocked high-risk raw payload.");
+    return cleanedText;
+  }
+};
 
 const normalizeRoutePath = (value, fallback) => {
   const raw = toSafeString(value || fallback || "");
@@ -37,10 +117,13 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
 
   const send = async (action, { method = "POST", headers = {}, body } = {}) => {
     const url = urlFor(action);
+    const safeHeaders = sanitizeHeaders(headers);
+    const safeBody = sanitizeBodyPayload(body);
+
     const response = await fetch(url, {
       method,
-      headers,
-      body,
+      headers: safeHeaders,
+      body: safeBody,
     });
     return { url, response };
   };
@@ -67,13 +150,13 @@ const createWorkerCommunication = ({ configPath = DEFAULT_CONFIG_PATH } = {}) =>
     }
 
     const headerName = String(hs.header_name || "x-gabo-repo-id").trim().toLowerCase();
-    const payload = {
+    const payload = sanitizeJsonLike({
       ok: true,
       from: "github-actions",
       workflow: process.env.GITHUB_WORKFLOW || "local",
       run_id: process.env.GITHUB_RUN_ID || "local",
       repo: process.env.GITHUB_REPOSITORY || "local",
-    };
+    });
 
     const { url, response } = await send("handshake", {
       method: "POST",
@@ -142,9 +225,9 @@ const maybeJson = (value) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
   try {
-    return JSON.stringify(JSON.parse(raw));
+    return JSON.stringify(sanitizeJsonLike(JSON.parse(raw)));
   } catch {
-    return raw;
+    return sanitizeText(raw);
   }
 };
 
@@ -168,7 +251,7 @@ const runCli = async () => {
   const method = args.method || defaultMethod;
 
   const body = method === "GET" || !args.body ? undefined : maybeJson(args.body);
-  const headers = { ...args.headers };
+  const headers = sanitizeHeaders({ ...args.headers });
 
   if (body && !Object.keys(headers).some((key) => key.toLowerCase() === "content-type")) {
     headers["content-type"] = "application/json";
