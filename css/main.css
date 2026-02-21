@@ -303,6 +303,7 @@ input:focus-visible {
 }
 
 #msgInput {
+  grid-row: 1;
   width: 100%;
   padding: 12px 14px;
   border-radius: var(--radius-md);
@@ -337,6 +338,11 @@ input:focus-visible {
   background: rgba(255, 255, 255, 0.10);
 }
 
+.send-btn,
+.cancel-btn {
+  grid-row: 1;
+}
+
 .send-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -355,6 +361,7 @@ input:focus-visible {
 
 /* Mic button */
 #micBtn {
+  grid-row: 1;
   width: 48px;
   height: 48px;
   display: grid;
@@ -374,6 +381,7 @@ input:focus-visible {
 
 .voice-helper {
   grid-column: 1 / -1;
+  grid-row: 2;
   min-height: 18px;
   font-size: 12px;
   color: var(--muted);
