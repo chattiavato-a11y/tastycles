@@ -40,7 +40,18 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Read handshake readiness from worker config
+        id: handshake_ready
+        run: |
+          READY=$(node -e "const fs=require('fs');const cfg=JSON.parse(fs.readFileSync('worker_files/worker.config.json','utf8'));process.stdout.write(String(Boolean(cfg?.actions_handshake?.ready)));")
+          echo "ready=${READY}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip handshake (not enabled)
+        if: steps.handshake_ready.outputs.ready != 'true'
+        run: echo "Repo ↔ Worker handshake disabled by worker_files/worker.config.json (actions_handshake.ready=false)."
+
       - name: Repo ↔ Worker handshake
+        if: steps.handshake_ready.outputs.ready == 'true'
         env:
           DRASTIC_MEASURES: ${{ secrets.DRASTIC_MEASURES }}
         run: node scripts/cf-worker-communication.mjs --action handshake
