@@ -1,25 +1,33 @@
 /**
  * worker_files/drastic-measures.gateway.js — drastic-measures — GATEWAY (Brain via Service Binding)
  *
- * GOAL (repo-aligned):
+ * GOAL:
  * - Fix CORS preflight (OPTIONS) reliably (no more missing Access-Control-Allow-Origin)
- * - Stay aligned with worker_files/worker.config.json (you stored it in env.ORIGIN_ASSET_ID_JSON)
+ * - Stay aligned with repo worker_files/worker.config.json contract
  * - Enforce Origin allowlist + per-origin asset identity (x-ops-asset-id)
  * - Repo ⇄ Worker handshake: POST /__repo/handshake with header x-gabo-repo-id matching env.DRASTIC_MEASURES
  * - TinyML sanitize/scan/block before Brain
  * - Escalate to Brain via service binding env.BRAIN (SSE bridge)
  *
  * Required bindings:
- * - env.AI    (Cloudflare AI binding)
+ * - env.AI (Cloudflare AI binding)
  * - env.BRAIN (Service binding to Brain Worker)
  *
- * Required vars:
- * - env.ORIGIN_ASSET_ID_JSON (JSON string: full worker_files/worker.config.json)
- * - env.DRASTIC_MEASURES     (repo handshake secret)
+ * Optional env vars:
+ * - ORIGIN_ASSET_ID_JSON  (JSON; can be full worker.config.json OR just origin_to_asset_id map)
+ * - DRASTIC_MEASURES      (repo handshake secret)
+ *
+ * Endpoints:
+ * - GET  /health and GET /api/health
+ * - OPTIONS * (preflight)
+ * - POST /api/chat  -> SSE
+ * - POST /api/voice -> STT JSON or chat SSE (mode=stt|chat)
+ * - POST /api/tts   -> audio/mpeg
+ * - POST /__repo/handshake -> JSON
  */
 
 /* -------------------------
- * HARD FALLBACKS (never empty)
+ * HARD FALLBACK (never empty)
  * ------------------------- */
 const FALLBACK_ALLOWED_ORIGINS = [
   "https://www.gabos.io",
@@ -40,7 +48,7 @@ const FALLBACK_ORIGIN_TO_ASSET = {
 };
 
 /* -------------------------
- * Contract constants (repo ⇄ worker)
+ * Contract constants
  * ------------------------- */
 const REPO_SECRET_HEADER = "x-gabo-repo-id";
 const REPO_HANDSHAKE_PATH = "/__repo/handshake";
@@ -50,7 +58,6 @@ const DEFAULT_ROUTES = {
   voice: "/api/voice",
   tts: "/api/tts",
   health: "/health",
-  api_health: "/api/health",
 };
 
 const ASSET_HDR_DEFAULT = "x-ops-asset-id";
@@ -79,7 +86,7 @@ const TTS_ES = "@cf/deepgram/aura-2-es";
 const TTS_FALLBACK = "@cf/myshell-ai/melotts";
 
 /* -------------------------
- * Limits (fallback; config can override)
+ * Limits
  * ------------------------- */
 const MAX_BODY_CHARS_DEFAULT = 8000;
 const MAX_MESSAGES_DEFAULT = 30;
@@ -89,7 +96,7 @@ const MAX_AUDIO_BYTES_DEFAULT = 12 * 1024 * 1024;
 const MAX_VOICE_JSON_AUDIO_B64_CHARS_DEFAULT = 2_500_000;
 
 /* -------------------------
- * Small utils
+ * Utils
  * ------------------------- */
 function toStr(x) {
   return typeof x === "string" ? x : x == null ? "" : String(x);
@@ -148,7 +155,7 @@ function timingSafeEq(a, b) {
  * Accepts:
  *  A) full worker.config.json
  *  B) plain origin_to_asset_id map
- * Never allows empty allowlist.
+ * Always prevents empty allowlist.
  * ------------------------- */
 let _CFG = null;
 
@@ -168,7 +175,7 @@ function buildCfg(env) {
 
   const raw = parseEnvJson(env);
 
-  // If user pasted only map, wrap it
+  // Wrap if user stored plain map
   const cfg0 =
     raw && typeof raw === "object" && !raw.asset_identity && !raw.allowedOrigins
       ? { asset_identity: { header_name: ASSET_HDR_DEFAULT, origin_to_asset_id: raw } }
@@ -181,16 +188,15 @@ function buildCfg(env) {
     voice: normalizeRoutePath(cfg0?.routes?.voice, DEFAULT_ROUTES.voice),
     tts: normalizeRoutePath(cfg0?.routes?.tts, DEFAULT_ROUTES.tts),
     health: normalizeRoutePath(cfg0?.routes?.health, DEFAULT_ROUTES.health),
-    api_health: DEFAULT_ROUTES.api_health,
+    api_health: "/api/health", // alias (your browser hit this)
   };
 
   const assetHeader = safeTextOnly(cfg0?.asset_identity?.header_name || ASSET_HDR_DEFAULT).toLowerCase();
   const integrityHeader = safeTextOnly(cfg0?.headers?.optional_integrity_header || INTEGRITY_HDR_DEFAULT).toLowerCase();
-
   const hopHeaderName = safeTextOnly(cfg0?.headers?.hop_header_name || HOP_HDR_DEFAULT).toLowerCase();
-  const hopHeaderValue = safeTextOnly(cfg0?.headers?.hop_header_value || HOP_VAL_DEFAULT) || HOP_VAL_DEFAULT;
+  const hopHeaderValue = safeTextOnly(cfg0?.headers?.hop_header_value || HOP_VAL_DEFAULT);
 
-  // Map: config overlays fallback
+  // Map: env map overlays fallback map
   const originToAsset = { ...FALLBACK_ORIGIN_TO_ASSET };
   const map =
     cfg0?.asset_identity?.origin_to_asset_id && typeof cfg0.asset_identity.origin_to_asset_id === "object"
@@ -208,6 +214,8 @@ function buildCfg(env) {
   if (!allowedList.length) allowedList = FALLBACK_ALLOWED_ORIGINS;
 
   const allowedOrigins = new Set(allowedList.map(normalizeOrigin).filter(Boolean));
+
+  // If still empty (should never happen), force fallback
   if (!allowedOrigins.size) {
     for (const o of FALLBACK_ALLOWED_ORIGINS) allowedOrigins.add(normalizeOrigin(o));
   }
@@ -247,7 +255,9 @@ function buildCfg(env) {
     max_messages: Number(cfg0?.limits?.max_messages || MAX_MESSAGES_DEFAULT),
     max_message_chars: Number(cfg0?.limits?.max_message_chars || MAX_MESSAGE_CHARS_DEFAULT),
     max_audio_bytes: Number(cfg0?.limits?.max_audio_bytes || MAX_AUDIO_BYTES_DEFAULT),
-    max_voice_json_audio_b64_chars: Number(cfg0?.limits?.max_voice_json_audio_b64_chars || MAX_VOICE_JSON_AUDIO_B64_CHARS_DEFAULT),
+    max_voice_json_audio_b64_chars: Number(
+      cfg0?.limits?.max_voice_json_audio_b64_chars || MAX_VOICE_JSON_AUDIO_B64_CHARS_DEFAULT
+    ),
   };
 
   const voiceTimeoutSec = Number(cfg0?.timeouts?.voice_timeout_sec || 120);
@@ -316,7 +326,6 @@ function corsPreflightHeaders(cfg, request, origin) {
 
   h.set("Access-Control-Allow-Methods", cfg.cors.allow_methods);
 
-  // IMPORTANT: mirror request headers if provided (prevents “No 'Access-Control-Allow-Origin' / headers mismatch” failures)
   const reqHdrs = request.headers.get("Access-Control-Request-Headers");
   if (reqHdrs && String(reqHdrs).trim()) h.set("Access-Control-Allow-Headers", String(reqHdrs));
   else h.set("Access-Control-Allow-Headers", cfg.cors.allow_headers.join(", "));
@@ -403,6 +412,7 @@ async function sha512Base64(text) {
   const bytes = new TextEncoder().encode(t);
   const hash = await crypto.subtle.digest("SHA-512", bytes);
   const u8 = new Uint8Array(hash);
+
   let bin = "";
   const chunk = 0x8000;
   for (let i = 0; i < u8.length; i += chunk) bin += String.fromCharCode(...u8.subarray(i, i + chunk));
@@ -411,6 +421,8 @@ async function sha512Base64(text) {
 
 /* -------------------------
  * TinyML Guard (edge sanitizer + block)
+ * - removes markup, strips code blocks
+ * - blocks code-like payloads in strict mode
  * ------------------------- */
 const TINYML_LIMITS = { maxInputChars: 4000, maxLineChars: 600, maxLines: 120 };
 
@@ -572,7 +584,7 @@ function tinyEvaluate(text, mode) {
 }
 
 /* -------------------------
- * Disclosure rules
+ * Model/author disclosure rules
  * ------------------------- */
 function wantsModelDisclosure(text) {
   const t = toStr(text).toLowerCase();
@@ -615,7 +627,7 @@ function postProcessOutgoingText(text, allowAuthor) {
 }
 
 /* -------------------------
- * Honeypots
+ * Honeypot detection
  * ------------------------- */
 function honeypotTriggeredFromHeaders(req) {
   return isNonEmpty(req.headers.get(HONEYPOT_HDR)) || isNonEmpty(req.headers.get(HONEYPOT_PRE_HDR));
@@ -630,7 +642,9 @@ function honeypotTriggeredFromObject(obj) {
 }
 
 /* -------------------------
- * Input coercion: OpenAI content parts + shorthand
+ * Message content coercion
+ * - supports OpenAI-style content parts
+ * - supports shorthand {message|prompt|input}
  * ------------------------- */
 function coerceMessageContent(content) {
   if (typeof content === "string") return content;
@@ -639,8 +653,11 @@ function coerceMessageContent(content) {
   if (Array.isArray(content)) {
     let out = "";
     for (const part of content) {
-      if (typeof part === "string") out += part + "\n";
-      else if (part && typeof part === "object") {
+      if (typeof part === "string") {
+        out += part + "\n";
+        continue;
+      }
+      if (part && typeof part === "object") {
         if (typeof part.text === "string") out += part.text + "\n";
         else if (typeof part.content === "string") out += part.content + "\n";
         else if (typeof part.value === "string") out += part.value + "\n";
@@ -675,21 +692,16 @@ function lastUserText(messages) {
 function sanitizeMeta(metaIn) {
   const meta = metaIn && typeof metaIn === "object" ? metaIn : {};
   const out = {};
-
   const lang = normalizeIso2(meta.lang_iso2 || "");
-  const spanishQuality = safeTextOnly(meta.spanish_quality || "").slice(0, 40);
-  const model = safeTextOnly(meta.model || "").slice(0, 40);
+  const spanishQuality = safeTextOnly(meta.spanish_quality || "");
+  const model = safeTextOnly(meta.model || "");
   const translateTo = normalizeIso2(meta.translate_to || "");
-
   if (lang) out.lang_iso2 = lang;
   if (spanishQuality) out.spanish_quality = spanishQuality;
   if (model) out.model = model;
   if (translateTo) out.translate_to = translateTo;
   if (typeof meta.want_embeddings === "boolean") out.want_embeddings = meta.want_embeddings;
-
-  const tinyMode = String(meta.tinyml_mode || "").toLowerCase();
-  if (tinyMode === "clean" || tinyMode === "strict") out.tinyml_mode = tinyMode;
-
+  if (meta.tinyml_mode) out.tinyml_mode = safeTextOnly(meta.tinyml_mode);
   return out;
 }
 
@@ -1012,15 +1024,12 @@ function bridgeBrainToSSE(brainBody, allowAuthor) {
 }
 
 /* -------------------------
- * Base64 helpers (voice/tts)
+ * Base64 helpers for voice/tts
  * ------------------------- */
 function bytesToBase64(u8) {
   const chunk = 0x8000;
   let binary = "";
-  for (let i = 0; i < u8.length; i += chunk) {
-    const sub = u8.subarray(i, i + chunk);
-    binary += String.fromCharCode(...sub);
-  }
+  for (let i = 0; i < u8.length; i += chunk) binary += String.fromCharCode(...u8.subarray(i, i + chunk));
   return btoa(binary);
 }
 
@@ -1036,7 +1045,9 @@ function base64ToBytes(b64) {
  * ------------------------- */
 async function runSTT(env, audioU8, audioB64Maybe) {
   const audio_b64 =
-    typeof audioB64Maybe === "string" && audioB64Maybe.length >= 16 ? audioB64Maybe : bytesToBase64(audioU8);
+    typeof audioB64Maybe === "string" && audioB64Maybe.length >= 16
+      ? audioB64Maybe
+      : bytesToBase64(audioU8);
 
   try {
     return await env.AI.run(MODEL_STT_TURBO, { audio: audio_b64 });
@@ -1086,15 +1097,15 @@ export default {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "";
 
-    // ---- OPTIONS preflight (CORS FIX)
+    // ---- OPTIONS preflight (CORS fix)
     if (request.method === "OPTIONS") {
       const h = corsPreflightHeaders(cfg, request, origin);
       securityHeaders().forEach((v, k) => h.set(k, v));
       return new Response(null, { status: 204, headers: h });
     }
 
-    // ---- Health: GET /health and GET /api/health and GET /
-    if (request.method === "GET" && (url.pathname === "/" || url.pathname === cfg.routes.health || url.pathname === cfg.routes.api_health)) {
+    // ---- Health
+    if (url.pathname === "/" || url.pathname === cfg.routes.health || url.pathname === cfg.routes.api_health) {
       return respondJson(cfg, origin, 200, {
         ok: true,
         health: "gateway: ok",
@@ -1103,7 +1114,7 @@ export default {
       });
     }
 
-    // ---- Debug: GET /api/chat snapshot
+    // ---- Debug snapshot (GET /api/chat)
     if (request.method === "GET" && url.pathname === cfg.routes.chat) {
       return respondJson(cfg, origin, 200, {
         ok: true,
@@ -1112,7 +1123,7 @@ export default {
         asset_header: cfg.assetHeader,
         integrity_header: cfg.integrityHeader,
         handshake: { method: "POST", path: REPO_HANDSHAKE_PATH, header: REPO_SECRET_HEADER, secret_env: "DRASTIC_MEASURES" },
-        note: "This build prevents empty allowlist and mirrors Access-Control-Request-Headers on preflight.",
+        note: "If allowed_origins is empty, CORS fails. This build prevents empty allowlist.",
       });
     }
 
@@ -1173,14 +1184,15 @@ export default {
       });
     }
 
+    // Common response header for verified identity
     const baseExtra = new Headers();
     baseExtra.set("x-gabo-asset-verified", "1");
 
-    // TinyML mode (optional)
+    // TinyML mode (header wins)
     const tinyMode = safeTextOnly(request.headers.get("x-gabo-tinyml-mode") || "strict").toLowerCase();
 
     // -----------------------
-    // /api/chat (SSE)
+    // /api/chat  (SSE)
     // -----------------------
     if (isChat) {
       const ct = (request.headers.get("content-type") || "").toLowerCase();
@@ -1197,17 +1209,17 @@ export default {
       if (wantIntegrity) {
         const got = await sha512Base64(raw);
         if (!got || !timingSafeEq(got, wantIntegrity)) {
-          return respondJson(cfg, origin, 400, {
-            error: "Integrity check failed",
-            hint: `Remove ${cfg.integrityHeader} or compute it from RAW JSON body.`,
-          }, baseExtra);
+          return respondJson(cfg, origin, 400, { error: "Integrity check failed", hint: "Remove x-ops-src-sha512-b64 or compute it from RAW JSON body." }, baseExtra);
         }
       }
 
       let body;
       try { body = JSON.parse(raw); }
-      catch { return respondJson(cfg, origin, 400, { error: "Invalid JSON" }, baseExtra); }
+      catch {
+        return respondJson(cfg, origin, 400, { error: "Invalid JSON" }, baseExtra);
+      }
 
+      // Honeypot in body
       if (honeypotTriggeredFromObject(body)) {
         return respondJson(cfg, origin, 403, { error: "Blocked (honeypot)", reason: "honeypot_body" }, baseExtra);
       }
@@ -1215,12 +1227,10 @@ export default {
       const metaSafe = sanitizeMeta(body.meta);
       const msgInput = coerceBodyMessages(body);
       if (!msgInput) {
-        return respondJson(cfg, origin, 400, {
-          error: "messages[] required",
-          hint: "Send {messages:[{role:'user',content:'hi'}]} OR {message:'hi'}",
-        }, baseExtra);
+        return respondJson(cfg, origin, 400, { error: "messages[] required", hint: "Send {messages:[{role:'user',content:'hi'}]} OR {message:'hi'}" }, baseExtra);
       }
 
+      // TinyML sanitize/normalize (may block)
       const norm = normalizeMessages(cfg, msgInput, metaSafe?.tinyml_mode || tinyMode);
       if (!norm.ok) {
         return respondJson(cfg, origin, 403, { error: "Blocked by TinyML", reason: norm.reason, tinyml: norm.tiny?.risk }, baseExtra);
@@ -1234,6 +1244,7 @@ export default {
       const lastUser = lastUserText(messages);
       const allowAuthor = wantsAuthorDisclosure(lastUser);
 
+      // Model non-disclosure
       if (wantsModelDisclosure(lastUser)) {
         const msg =
           `I can’t disclose the specific model identifiers or configuration.\n` +
@@ -1242,6 +1253,7 @@ export default {
         return respondSSE(cfg, origin, oneShotSSE(msg), baseExtra);
       }
 
+      // Language detect
       const langIso2 = await detectLangIso2(env, messages, metaSafe);
       if (!metaSafe.lang_iso2 || metaSafe.lang_iso2 === "auto" || metaSafe.lang_iso2 === "und") metaSafe.lang_iso2 = langIso2;
 
@@ -1270,7 +1282,7 @@ export default {
     }
 
     // -----------------------
-    // /api/tts (audio/mpeg)
+    // /api/tts  (audio/mpeg)
     // -----------------------
     if (isTts) {
       const ct = (request.headers.get("content-type") || "").toLowerCase();
@@ -1312,7 +1324,7 @@ export default {
     }
 
     // -----------------------
-    // /api/voice (STT or chat)
+    // /api/voice  (STT or chat)
     // -----------------------
     if (isVoice) {
       const mode = String(url.searchParams.get("mode") || "stt").toLowerCase();
@@ -1447,6 +1459,7 @@ export default {
       return respondSSE(cfg, origin, bridgeBrainToSSE(brainResp.body, allowAuthor), extra);
     }
 
+    // Should never reach
     return respondJson(cfg, origin, 500, { error: "Unhandled route" });
   },
 };
