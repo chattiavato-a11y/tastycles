@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { createBridge, DEFAULT_CONFIG_PATH } from "./cf-worker-bridge.mjs";
 
-const cfg = JSON.parse(readFileSync("worker_files/worker.config.json", "utf8"));
-const hs = cfg.actions_handshake || {};
+const bridge = createBridge({ configPath: DEFAULT_CONFIG_PATH });
+const hs = bridge.config.actions_handshake || {};
 
 if (!hs.ready) {
   console.log("Handshake skipped: actions_handshake.ready is false.");
@@ -22,34 +22,27 @@ if (!secret) {
   process.exit(1);
 }
 
-const path = String(hs.path || "/__repo/handshake");
-const base = String(cfg.gatewayEndpoint || cfg.workerEndpoint || "").replace(/\/$/, "");
-if (!base) {
-  console.error("Missing gatewayEndpoint/workerEndpoint in worker.config.json");
-  process.exit(1);
-}
-
 const headerName = String(hs.header_name || "x-gabo-repo-id").trim().toLowerCase();
-const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
-const body = JSON.stringify({
+
+const payload = {
   source: "github-actions",
   workflow: process.env.GITHUB_WORKFLOW || "local",
   run_id: process.env.GITHUB_RUN_ID || "local",
   repo: process.env.GITHUB_REPOSITORY || "local",
-});
+};
 
-const res = await fetch(url, {
+const { url, response } = await bridge.send("handshake", {
   method: "POST",
   headers: {
     "content-type": "application/json",
     [headerName]: secret,
   },
-  body,
+  body: JSON.stringify(payload),
 });
 
-if (!res.ok) {
-  const text = await res.text().catch(() => "");
-  console.error(`Handshake failed (${res.status}) ${text.slice(0, 240)}`);
+if (!response.ok) {
+  const text = await response.text().catch(() => "");
+  console.error(`Handshake failed (${response.status}) ${text.slice(0, 240)}`);
   process.exit(1);
 }
 
