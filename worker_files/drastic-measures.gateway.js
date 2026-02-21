@@ -237,16 +237,20 @@ function corsPreflight(cfg, req, origin) {
   const o = normalizeOrigin(origin);
   const allowed = originAllowed(cfg, o);
 
-  if (o) {
-    h.set("Access-Control-Allow-Origin", o);
-    h.set("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
-  }
+  h.set("Access-Control-Allow-Origin", allowed && o ? o : "*");
+  h.set("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
 
   h.set("Access-Control-Allow-Methods", cfg.cors.allow_methods);
 
   const reqHdrs = req.headers.get("Access-Control-Request-Headers");
-  if (reqHdrs && String(reqHdrs).trim()) h.set("Access-Control-Allow-Headers", String(reqHdrs));
-  else h.set("Access-Control-Allow-Headers", cfg.cors.allow_headers.join(", "));
+  if (reqHdrs && String(reqHdrs).trim()) {
+    const requested = String(reqHdrs)
+      .split(",")
+      .map((x) => safeTextOnly(x).toLowerCase())
+      .filter(Boolean);
+    const merged = Array.from(new Set([...cfg.cors.allow_headers, ...requested]));
+    h.set("Access-Control-Allow-Headers", merged.join(", "));
+  } else h.set("Access-Control-Allow-Headers", cfg.cors.allow_headers.join(", "));
 
   h.set("Access-Control-Max-Age", String(cfg.cors.max_age_sec));
   h.set("Access-Control-Expose-Headers", cfg.cors.expose_headers.join(", "));
@@ -261,10 +265,8 @@ function corsResponse(cfg, origin) {
   const h = new Headers();
   const o = normalizeOrigin(origin);
   const allowed = originAllowed(cfg, o);
-  if (o) {
-    h.set("Access-Control-Allow-Origin", o);
-    h.set("Vary", "Origin");
-  }
+  h.set("Access-Control-Allow-Origin", allowed && o ? o : "*");
+  h.set("Vary", "Origin");
   h.set("Access-Control-Expose-Headers", cfg.cors.expose_headers.join(", "));
   h.set("x-gabo-cors-debug", `worker_ok;${allowed ? "origin_allowed" : "origin_denied"};cfg=${cfg._cfg_source}`);
   return h;
