@@ -33,9 +33,6 @@ const HONEYPOT_HDR = "x-gabo-honeypot";
 const HONEYPOT_PRE_HDR = "x-gabo-honeypot-pre";
 const HONEYPOT_FIELDS = ["contact", "website", "contact-field", "website-field", "hp", "honeypot", "trap"];
 
-// Keep JSON audio payloads bounded before decode.
-const MAX_VOICE_JSON_AUDIO_B64_CHARS = 16 * 1024 * 1024;
-
 // -------------------------
 // Identity + disclosure policy
 // -------------------------
@@ -44,24 +41,8 @@ const AUTHOR_NAME = "Gabriel Anangono";
 function wantsModelDisclosure(text) {
   const t = String(text || "").toLowerCase();
   const needles = [
-    "what model",
-    "which model",
-    "model are you",
-    "model do you use",
-    "what llm",
-    "which llm",
-    "what ai model",
-    "which ai model",
-    "tell me the model",
-    "@cf/",
-    "llama-",
-    "gpt-",
-    "gemini",
-    "claude",
-    "mistral",
-    "whisper-",
-    "deepgram",
-    "bge-",
+    "what model","which model","model are you","model do you use","what llm","which llm","what ai model","which ai model",
+    "tell me the model","@cf/","llama-","gpt-","gemini","claude","mistral","whisper-","deepgram","bge-",
   ];
   return needles.some((n) => t.includes(n));
 }
@@ -69,21 +50,8 @@ function wantsModelDisclosure(text) {
 function wantsAuthorDisclosure(text) {
   const t = String(text || "").toLowerCase();
   const needles = [
-    "who created you",
-    "who made you",
-    "who built you",
-    "who is your author",
-    "who is the author",
-    "who is your creator",
-    "creator",
-    "author",
-    "desarrollador",
-    "creador",
-    "quién te creó",
-    "quien te creo",
-    "quién te hizo",
-    "hecho por",
-    "creado por",
+    "who created you","who made you","who built you","who is your author","who is the author","who is your creator",
+    "creator","author","desarrollador","creador","quién te creó","quien te creo","quién te hizo","hecho por","creado por",
   ];
   return needles.some((n) => t.includes(n));
 }
@@ -122,15 +90,14 @@ const MODEL_STT_FALLBACK = "@cf/openai/whisper";
 const TTS_EN = "@cf/deepgram/aura-2-en";
 const TTS_ES = "@cf/deepgram/aura-2-es";
 const TTS_FALLBACK = "@cf/myshell-ai/melotts";
+const MAX_VOICE_JSON_AUDIO_B64_CHARS = 16 * 1024 * 1024;
 
 // -------------------------
 // Config loader (env.ORIGIN_ASSET_ID_JSON is full worker.config.json)
 // -------------------------
 let _CFG = null;
 
-function toStr(x) {
-  return typeof x === "string" ? x : x == null ? "" : String(x);
-}
+function toStr(x) { return typeof x === "string" ? x : x == null ? "" : String(x); }
 
 function safeTextOnly(s) {
   s = toStr(s);
@@ -147,11 +114,8 @@ function safeTextOnly(s) {
 function normalizeOrigin(value) {
   const v = toStr(value).trim();
   if (!v) return "";
-  try {
-    return new URL(v).origin.toLowerCase();
-  } catch {
-    return v.replace(/\/$/, "").toLowerCase();
-  }
+  try { return new URL(v).origin.toLowerCase(); }
+  catch { return v.replace(/\/$/, "").toLowerCase(); }
 }
 
 function normalizeRoutePath(value, fallback) {
@@ -165,18 +129,14 @@ function readConfigVar(env) {
   if (!v) return null;
   // Cloudflare may supply JSON vars as object OR string.
   if (typeof v === "object") return v;
-  try {
-    return JSON.parse(String(v));
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(String(v)); } catch { return null; }
 }
 
 function buildConfig(env) {
   if (_CFG) return _CFG;
 
   const rawCfg = readConfigVar(env);
-  const cfg = rawCfg && typeof rawCfg === "object" ? rawCfg : {};
+  const cfg = (rawCfg && typeof rawCfg === "object") ? rawCfg : {};
 
   // Core pieces
   const routes = {
@@ -191,7 +151,7 @@ function buildConfig(env) {
     max_body_chars: Number(cfg?.limits?.max_body_chars || 8000),
     max_messages: Number(cfg?.limits?.max_messages || 30),
     max_message_chars: Number(cfg?.limits?.max_message_chars || 1000),
-    max_audio_bytes: Number(cfg?.limits?.max_audio_bytes || 12 * 1024 * 1024),
+    max_audio_bytes: Number(cfg?.limits?.max_audio_bytes || (12 * 1024 * 1024)),
   };
 
   const timeouts = { voice_timeout_sec: Number(cfg?.timeouts?.voice_timeout_sec || 120) };
@@ -204,10 +164,9 @@ function buildConfig(env) {
 
   // Origin -> AssetId map
   const originAssetMap = {};
-  const m =
-    cfg?.asset_identity?.origin_to_asset_id && typeof cfg.asset_identity.origin_to_asset_id === "object"
-      ? cfg.asset_identity.origin_to_asset_id
-      : {};
+  const m = cfg?.asset_identity?.origin_to_asset_id && typeof cfg.asset_identity.origin_to_asset_id === "object"
+    ? cfg.asset_identity.origin_to_asset_id
+    : {};
   for (const [k, v] of Object.entries(m)) {
     const o = normalizeOrigin(k);
     const id = safeTextOnly(v);
@@ -215,22 +174,16 @@ function buildConfig(env) {
   }
 
   // Allowed origins
-  const allowedOriginsArr = Array.isArray(cfg?.allowedOrigins) && cfg.allowedOrigins.length ? cfg.allowedOrigins : Object.keys(originAssetMap);
+  const allowedOriginsArr = Array.isArray(cfg?.allowedOrigins) && cfg.allowedOrigins.length
+    ? cfg.allowedOrigins
+    : Object.keys(originAssetMap);
   const allowedOrigins = new Set(allowedOriginsArr.map(normalizeOrigin).filter(Boolean));
 
   // CORS
   const cors = {
     allow_methods: safeTextOnly(cfg?.cors?.allow_methods || "GET, POST, OPTIONS"),
-    allow_headers: Array.isArray(cfg?.cors?.allow_headers)
-      ? cfg.cors.allow_headers
-          .map((h) => safeTextOnly(h).toLowerCase())
-          .filter(Boolean)
-      : [],
-    expose_headers: Array.isArray(cfg?.cors?.expose_headers)
-      ? cfg.cors.expose_headers
-          .map((h) => safeTextOnly(h).toLowerCase())
-          .filter(Boolean)
-      : [],
+    allow_headers: Array.isArray(cfg?.cors?.allow_headers) ? cfg.cors.allow_headers.map((h) => safeTextOnly(h).toLowerCase()).filter(Boolean) : [],
+    expose_headers: Array.isArray(cfg?.cors?.expose_headers) ? cfg.cors.expose_headers.map((h) => safeTextOnly(h).toLowerCase()).filter(Boolean) : [],
     max_age_sec: Number(cfg?.cors?.max_age_sec || 86400),
   };
 
@@ -290,12 +243,8 @@ function securityHeaders(cfg) {
 function isAllowedOrigin(cfg, origin) {
   const o = normalizeOrigin(origin);
   if (!o || o === "null") return false;
-
-  // Fail-open CORS mode for operational resilience:
-  // if no allowlist could be built from config, reflect the caller origin so
-  // browser clients can receive explicit JSON errors instead of opaque CORS failures.
+  // Fail-open only when config is missing/empty to avoid CORS hard-lock during misconfiguration.
   if (!cfg.allowedOrigins || cfg.allowedOrigins.size === 0) return true;
-
   return cfg.allowedOrigins.has(o);
 }
 
@@ -305,7 +254,6 @@ function corsHeadersForResponse(cfg, origin) {
   if (isAllowedOrigin(cfg, o)) {
     h.set("Access-Control-Allow-Origin", o);
     h.set("Vary", "Origin");
-    if (!cfg.allowedOrigins || cfg.allowedOrigins.size === 0) h.set("x-gabo-cors-mode", "fail-open-no-allowlist");
   }
   if (cfg.cors.expose_headers.length) h.set("Access-Control-Expose-Headers", cfg.cors.expose_headers.join(", "));
   return h;
@@ -318,7 +266,6 @@ function corsHeadersForPreflight(cfg, request, origin) {
   if (isAllowedOrigin(cfg, o)) {
     h.set("Access-Control-Allow-Origin", o);
     h.set("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
-    if (!cfg.allowedOrigins || cfg.allowedOrigins.size === 0) h.set("x-gabo-cors-mode", "fail-open-no-allowlist");
   }
 
   h.set("Access-Control-Allow-Methods", cfg.cors.allow_methods || "GET, POST, OPTIONS");
@@ -412,10 +359,7 @@ function clampText(text, maxChars) {
 }
 
 function collapseWhitespace(text) {
-  return toStr(text)
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return toStr(text).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function stripDangerousMarkup(text) {
@@ -452,10 +396,7 @@ function tinyScore(text) {
   let score = 0;
   const hits = [];
   for (const p of TINYML_PATTERNS) {
-    if (p.re.test(s)) {
-      score += p.w;
-      hits.push(p.id);
-    }
+    if (p.re.test(s)) { score += p.w; hits.push(p.id); }
   }
   if (s.length > 600) score += 1;
   if (s.length > 1200) score += 1;
@@ -503,9 +444,7 @@ function timingSafeEq(a, b) {
 // -------------------------
 // Honeypot detection
 // -------------------------
-function isNonEmpty(value) {
-  return safeTextOnly(value).length > 0;
-}
+function isNonEmpty(value) { return safeTextOnly(value).length > 0; }
 
 function honeypotTriggeredFromHeaders(req) {
   return isNonEmpty(req.headers.get(HONEYPOT_HDR)) || isNonEmpty(req.headers.get(HONEYPOT_PRE_HDR));
@@ -714,12 +653,7 @@ function extractJsonObjectsFromBuffer(buffer) {
     const ch = buffer[i];
 
     if (start === -1) {
-      if (ch === "{") {
-        start = i;
-        depth = 1;
-        inStr = false;
-        esc = false;
-      }
+      if (ch === "{") { start = i; depth = 1; inStr = false; esc = false; }
       continue;
     }
 
@@ -819,11 +753,7 @@ function bridgeBrainToSSE(brainBody, allowAuthor) {
 
           for (const s of chunks) {
             let obj;
-            try {
-              obj = JSON.parse(s);
-            } catch {
-              continue;
-            }
+            try { obj = JSON.parse(s); } catch { continue; }
             const delta = getDeltaFromObj(obj);
             const out = postProcessOutgoingText(delta, allowAuthor);
             if (out) controller.enqueue(encoder.encode(sseDataFrame(out)));
@@ -834,12 +764,8 @@ function bridgeBrainToSSE(brainBody, allowAuthor) {
       } catch {
         controller.enqueue(encoder.encode("event: error\ndata: stream_error\n\n"));
       } finally {
-        try {
-          reader.releaseLock();
-        } catch {}
-        try {
-          controller.close();
-        } catch {}
+        try { reader.releaseLock(); } catch {}
+        try { controller.close(); } catch {}
       }
     },
   });
@@ -856,13 +782,13 @@ function base64ToBytes(b64) {
 }
 
 async function runSTT(env, audioU8, audioB64Maybe) {
-  const audio_b64 = typeof audioB64Maybe === "string" && audioB64Maybe.length >= 16 ? audioB64Maybe : base64EncodeBytes(audioU8);
+  const audio_b64 = (typeof audioB64Maybe === "string" && audioB64Maybe.length >= 16) ? audioB64Maybe : base64EncodeBytes(audioU8);
 
   try {
     return await env.AI.run(MODEL_STT_TURBO, { audio: audio_b64 });
   } catch (eTurbo) {
     try {
-      if (audioU8.byteLength <= 1500000) return await env.AI.run(MODEL_STT_FALLBACK, { audio: Array.from(audioU8) });
+      if (audioU8.byteLength <= 1_500_000) return await env.AI.run(MODEL_STT_FALLBACK, { audio: Array.from(audioU8) });
     } catch (eFallback) {
       throw new Error(String(eFallback?.message || eFallback || eTurbo?.message || eTurbo));
     }
@@ -1036,11 +962,8 @@ export default {
       }
 
       let body;
-      try {
-        body = JSON.parse(raw);
-      } catch {
-        return json(cfg, origin, 400, { error: "Invalid JSON" }, baseExtra);
-      }
+      try { body = JSON.parse(raw); }
+      catch { return json(cfg, origin, 400, { error: "Invalid JSON" }, baseExtra); }
 
       if (honeypotTriggeredFromObject(body)) {
         return json(cfg, origin, 403, { error: "Blocked (honeypot)", decision: "block", reason: "honeypot_body" }, baseExtra);
@@ -1073,22 +996,16 @@ export default {
 
       // Guard at edge
       let guardRes;
-      try {
-        guardRes = await env.AI.run(MODEL_GUARD, { messages });
-      } catch {
-        return json(cfg, origin, 502, { error: "Safety check unavailable" }, baseExtra);
-      }
+      try { guardRes = await env.AI.run(MODEL_GUARD, { messages }); }
+      catch { return json(cfg, origin, 502, { error: "Safety check unavailable" }, baseExtra); }
 
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(cfg, origin, 403, { error: "Blocked by safety filter", categories: verdict.categories }, baseExtra);
 
       // Call Brain
       let brainResp;
-      try {
-        brainResp = await callBrainChat(cfg, env, { messages, meta: metaSafe }, origin, assetCheck.got);
-      } catch (e) {
-        return json(cfg, origin, 502, { error: "Brain unreachable", detail: String(e?.message || e) }, baseExtra);
-      }
+      try { brainResp = await callBrainChat(cfg, env, { messages, meta: metaSafe }, origin, assetCheck.got); }
+      catch (e) { return json(cfg, origin, 502, { error: "Brain unreachable", detail: String(e?.message || e) }, baseExtra); }
 
       if (!brainResp.ok) {
         const t = await brainResp.text().catch(() => "");
@@ -1117,11 +1034,7 @@ export default {
       }
 
       let body;
-      try {
-        body = JSON.parse(raw);
-      } catch {
-        return json(cfg, origin, 400, { error: "Invalid JSON" }, baseExtra);
-      }
+      try { body = JSON.parse(raw); } catch { return json(cfg, origin, 400, { error: "Invalid JSON" }, baseExtra); }
 
       if (honeypotTriggeredFromObject(body)) return json(cfg, origin, 403, { error: "Blocked (honeypot)" }, baseExtra);
 
@@ -1171,11 +1084,7 @@ export default {
         }
 
         let body;
-        try {
-          body = JSON.parse(raw);
-        } catch {
-          return json(cfg, origin, 400, { error: "Invalid JSON" }, baseExtra);
-        }
+        try { body = JSON.parse(raw); } catch { return json(cfg, origin, 400, { error: "Invalid JSON" }, baseExtra); }
 
         if (honeypotTriggeredFromObject(body)) return json(cfg, origin, 403, { error: "Blocked (honeypot)" }, baseExtra);
 
@@ -1203,11 +1112,8 @@ export default {
         }
       } else if (ct.includes("multipart/form-data")) {
         let fd;
-        try {
-          fd = await request.formData();
-        } catch {
-          return json(cfg, origin, 400, { error: "Invalid multipart/form-data" }, baseExtra);
-        }
+        try { fd = await request.formData(); }
+        catch { return json(cfg, origin, 400, { error: "Invalid multipart/form-data" }, baseExtra); }
 
         for (const k of HONEYPOT_FIELDS) {
           const v = fd.get(k);
@@ -1229,11 +1135,8 @@ export default {
       }
 
       let sttOut;
-      try {
-        sttOut = await runSTT(env, audioU8, audioB64);
-      } catch (e) {
-        return json(cfg, origin, 502, { error: "Whisper unavailable", detail: String(e?.message || e) }, baseExtra);
-      }
+      try { sttOut = await runSTT(env, audioU8, audioB64); }
+      catch (e) { return json(cfg, origin, 502, { error: "Whisper unavailable", detail: String(e?.message || e) }, baseExtra); }
 
       const transcriptRaw = sttOut?.text || sttOut?.result?.text || sttOut?.response?.text || "";
       const tEv = tinyEvaluate(transcriptRaw, tinyMode);
@@ -1250,24 +1153,20 @@ export default {
         return json(cfg, origin, 200, { transcript, lang_iso2: metaSafe.lang_iso2 || "und", voice_timeout_sec: cfg.timeouts.voice_timeout_sec || 120 }, extra);
       }
 
-      const messages = priorMessages.length ? [...priorMessages, { role: "user", content: transcript }] : [{ role: "user", content: transcript }];
+      const messages = priorMessages.length
+        ? [...priorMessages, { role: "user", content: transcript }]
+        : [{ role: "user", content: transcript }];
 
       let guardRes;
-      try {
-        guardRes = await env.AI.run(MODEL_GUARD, { messages });
-      } catch {
-        return json(cfg, origin, 502, { error: "Safety check unavailable" }, extra);
-      }
+      try { guardRes = await env.AI.run(MODEL_GUARD, { messages }); }
+      catch { return json(cfg, origin, 502, { error: "Safety check unavailable" }, extra); }
 
       const verdict = parseGuardResult(guardRes);
       if (!verdict.safe) return json(cfg, origin, 403, { error: "Blocked by safety filter", categories: verdict.categories }, extra);
 
       let brainResp;
-      try {
-        brainResp = await callBrainChat(cfg, env, { messages, meta: metaSafe }, origin, assetCheck.got);
-      } catch (e) {
-        return json(cfg, origin, 502, { error: "Brain unreachable", detail: String(e?.message || e) }, extra);
-      }
+      try { brainResp = await callBrainChat(cfg, env, { messages, meta: metaSafe }, origin, assetCheck.got); }
+      catch (e) { return json(cfg, origin, 502, { error: "Brain unreachable", detail: String(e?.message || e) }, extra); }
 
       if (!brainResp.ok) {
         const t = await brainResp.text().catch(() => "");
