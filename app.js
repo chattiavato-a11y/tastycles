@@ -1279,11 +1279,23 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+
+async function registerClientCacheServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  try {
+    await navigator.serviceWorker.register("/sw.js");
+  } catch (error) {
+    console.warn("Service worker registration failed.", error);
+  }
+}
+
 // -------------------------
 // Init
 // -------------------------
 const initApp = async () => {
-  scheduleWorkerClientWarmup();
+  await registerClientCacheServiceWorker();
+
   await loadCanonicalConfig();
 
   // If config loaded but only assistantEndpoint exists, derive worker endpoint
