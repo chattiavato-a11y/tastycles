@@ -7,7 +7,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta
     name="description"
-    content="Gabo delivers secure, human-centered concierge chat experiences with compliance-first design, fast performance, and AI-ready guidance."
+    content="Gabo delivers secure, multilingual concierge chat experiences with compliance-first design, fast performance, and AI-ready guidance."
   />
   <meta
     name="keywords"
@@ -46,19 +46,44 @@
   <link rel="preload" href="app.js" as="script" />
   <link rel="preload" href="worker_files/client.worker.js" as="script" />
 
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
-  <link
-    href="https://cdnjs.cloudflare.com/ajax/libs/inter-ui/4.1.0/inter.min.css"
-    rel="stylesheet"
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Gabo | Secure Multilingual AI Concierge Chat" />
+  <meta
+    property="og:description"
+    content="Secure, human-centered multilingual concierge chat with fast UX and compliance-first architecture."
   />
-  <link
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-    rel="stylesheet"
+  <meta property="og:url" content="https://www.gabos.io/" />
+  <meta property="og:site_name" content="Gabo" />
+  <meta property="og:locale" content="en_US" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Gabo | Secure Multilingual AI Concierge Chat" />
+  <meta
+    name="twitter:description"
+    content="Chat in any language with a secure, compliance-aware AI concierge built for speed and reliability."
   />
 
+  <link rel="preload" href="css/main.css" as="style" />
+  <link rel="preload" href="css/adapt_screens.css" as="style" />
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/adapt_screens.css" />
-  <script defer src="worker_files/client.worker.js"></script>
+
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Gabo",
+      "url": "https://www.gabos.io/",
+      "description": "Secure multilingual concierge chat experiences with compliance-first architecture.",
+      "inLanguage": "en",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://www.gabos.io/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+  </script>
+
   <script defer src="app.js"></script>
 </head>
 
@@ -126,8 +151,10 @@
 
         <span id="voice-helper" class="voice-helper" aria-live="polite"></span>
 
-        <button id="micBtn" type="button" aria-label="Voice reply" aria-pressed="false">
-          <i class="fa-solid fa-microphone-lines voice-icon" aria-hidden="true"></i>
+        <button id="micBtn" type="button" aria-label="Voice reply" aria-pressed="false" title="Voice reply">
+          <svg class="voice-icon" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+            <path d="M12 16.75A4.75 4.75 0 0 1 7.25 12V6a4.75 4.75 0 1 1 9.5 0v6A4.75 4.75 0 0 1 12 16.75zm6.25-4.75a.75.75 0 0 1 1.5 0A7.75 7.75 0 0 1 12.75 19.7v2.05a.75.75 0 0 1-1.5 0V19.7A7.75 7.75 0 0 1 4.25 12a.75.75 0 0 1 1.5 0 6.25 6.25 0 0 0 12.5 0z" />
+          </svg>
         </button>
 
         <button class="send-btn" type="submit" id="send-btn" disabled>Send</button>
