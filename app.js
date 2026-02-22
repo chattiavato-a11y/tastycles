@@ -1257,9 +1257,9 @@ const initApp = async () => {
   stopThinking();
 
   if (!OPS_ASSET_ID) {
-    setSecurityMessage("Security checks active, but asset identity mapping is missing for this origin.");
+    setSecurityMessage("Asset identity mapping is missing for this origin.");
   } else {
-    setSecurityMessage("Security checks active.");
+    setSecurityMessage("");
   }
 };
 
