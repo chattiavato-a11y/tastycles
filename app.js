@@ -64,6 +64,49 @@ let allowedOrigins = [];
 window.OPS_ASSET_BY_ORIGIN = OPS_ASSET_BY_ORIGIN;
 window.OPS_ASSET_ID = OPS_ASSET_ID;
 
+const WORKER_CLIENT_URL = "worker_files/client.worker.js";
+let workerClientLoadPromise = null;
+
+function ensureWorkerClientLoaded() {
+  if (window.WorkerClient?.postChat) return Promise.resolve(window.WorkerClient);
+  if (workerClientLoadPromise) return workerClientLoadPromise;
+
+  workerClientLoadPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${WORKER_CLIENT_URL}"]`);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.WorkerClient), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Failed to load Worker client module.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = WORKER_CLIENT_URL;
+    script.defer = true;
+    script.onload = () => resolve(window.WorkerClient);
+    script.onerror = () => reject(new Error("Failed to load Worker client module."));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    workerClientLoadPromise = null;
+    throw error;
+  });
+
+  return workerClientLoadPromise;
+}
+
+function scheduleWorkerClientWarmup() {
+  const warmup = () => {
+    ensureWorkerClientLoaded().catch((error) => {
+      console.warn("Worker client warmup skipped.", error);
+    });
+  };
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(() => warmup(), { timeout: 1200 });
+  } else {
+    window.setTimeout(warmup, 250);
+  }
+}
+
 function safeTextOnly(s) {
   s = String(s || "");
   let out = "";
@@ -919,6 +962,7 @@ function setMicUI(isOn) {
 
 async function playVoiceReply(text) {
   if (!text) return;
+  await ensureWorkerClientLoaded();
   if (!window.WorkerClient?.postTTS) throw new Error("Worker TTS module is not loaded.");
 
   if (activeVoiceAudio) {
@@ -999,6 +1043,7 @@ async function stopMicAndTranscribe() {
   setMicUI(false);
 
   if (!blob || blob.size === 0) throw new Error("No audio captured. Please try again.");
+  await ensureWorkerClientLoaded();
   if (!window.WorkerClient?.postVoiceSTT) throw new Error("Worker voice module is not loaded.");
 
   const preferredLanguage = getPreferredLanguage();
@@ -1179,6 +1224,7 @@ form.addEventListener("submit", async (event) => {
   activeController = controller;
 
   try {
+    await ensureWorkerClientLoaded();
     if (!window.WorkerClient?.postChat) throw new Error("Worker client module is not loaded.");
 
     const payload = {
@@ -1237,6 +1283,7 @@ form.addEventListener("submit", async (event) => {
 // Init
 // -------------------------
 const initApp = async () => {
+  scheduleWorkerClientWarmup();
   await loadCanonicalConfig();
 
   // If config loaded but only assistantEndpoint exists, derive worker endpoint
