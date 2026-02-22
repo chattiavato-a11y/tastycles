@@ -1,12 +1,12 @@
 /* css/main.css — Gabo UI
  *
  * Security/compliance notes:
- * - CSP-compatible: style-src 'self' https://fonts.googleapis.com
+ * - CSP-compatible: style-src 'self' https://cdnjs.cloudflare.com
  * - No inline styles required
  * - No javascript: URLs
  * - No external images required (uses gradients)
  * - Accessible focus states + reduced motion support
- * - Avoids embedding remote fonts directly; only uses Google Fonts endpoints already allowlisted
+ * - Uses Cloudflare CDN-hosted font assets already allowlisted in CSP
  *
  * Notes:
  * - Keep this file served from same-origin as index.html
@@ -369,9 +369,9 @@ input:focus-visible {
   padding: 0;
 }
 
-#micBtn .voice-wave-icon {
-  width: 26px;
-  height: 26px;
+#micBtn .voice-icon {
+  font-size: 20px;
+  line-height: 1;
 }
 
 #micBtn.is-listening {
